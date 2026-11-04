@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Dispatcher dashboard · Ambulance Dispatch{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+{% endblock %}
+{% block content %}
+<div class="page-heading row-heading">
+  <div><p class="eyebrow">Operations</p><h1>Dispatcher dashboard</h1></div>
+  <a class="button" href="{% url 'dispatcher:bookings' %}">Review pending requests</a>
+</div>
+<section class="stats-grid">
+  <article class="stat"><span>Total ambulances</span><strong>{{ total_ambulances }}</strong></article>
+  <article class="stat"><span>Available</span><strong>{{ available_ambulances }}</strong></article>
+  <article class="stat"><span>Unavailable</span><strong>{{ unavailable_ambulances }}</strong></article>
+  <article class="stat"><span>Pending requests</span><strong>{{ pending_bookings }}</strong></article>
+  <article class="stat"><span>Active assignments</span><strong>{{ active_bookings }}</strong></article>
+</section>
+<section class="card">
+  <div class="section-heading"><h2>Live ambulance locations</h2><span class="muted">Refreshes every 5 seconds</span></div>
+  <div id="dispatch-map" class="map" data-locations-url="{% url 'dispatcher:locations' %}" aria-label="Map of ambulance locations"></div>
+  <p id="map-status" class="muted" aria-live="polite">Loading ambulance locations…</p>
+</section>
+<section class="card">
+  <div class="section-heading"><h2>Recent requests</h2><a href="{% url 'dispatcher:bookings' %}">All pending requests</a></div>
+  {% if bookings %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Booking</th><th>Patient</th><th>Emergency</th><th>Status</th><th>Pickup</th></tr></thead>
+      <tbody>{% for booking in bookings %}
+        <tr>
+          <td><a href="{% url 'bookings:detail' booking.pk %}">{{ booking.pk }}</a></td>
+          <td>{{ booking.patient.name }}</td><td>{{ booking.emergency_type }}</td>
+          <td><span class="status">{{ booking.get_status_display }}</span></td><td>{{ booking.location_address }}</td>
+        </tr>
+      {% endfor %}</tbody>
+    </table></div>
+  {% else %}<p class="empty-state">No emergency requests have been recorded.</p>{% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{% static 'js/dispatcher.js' %}" defer></script>
+{% endblock %}

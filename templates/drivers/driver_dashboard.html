@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Driver dashboard · Ambulance Dispatch{% endblock %}
+{% block content %}
+<div class="page-heading"><p class="eyebrow">Driver · {{ ambulance.vehicle_number }}</p><h1>Your response assignments</h1></div>
+<section class="card location-card" data-location-url="{{ location_url }}">
+  <div class="section-heading">
+    <h2>Vehicle status</h2>
+    <span class="status">{{ ambulance.get_availability_status_display }} · {{ ambulance.get_patient_status_display }}</span>
+  </div>
+  <form method="post" action="{% url 'drivers:availability' %}" class="inline-fields">
+    {% csrf_token %}
+    <div class="field">{{ availability_form.availability_status.label_tag }}{{ availability_form.availability_status }}</div>
+    <button class="button button-small" type="submit">Update availability</button>
+  </form>
+  <h2>GPS sharing</h2>
+  <p id="gps-status" class="muted">GPS sharing is not active.</p>
+  <p class="muted">Keep this page open and allow location access to share updates while online.</p>
+  <form id="gps-csrf" hidden>{% csrf_token %}</form>
+</section>
+<section class="card">
+  {% if bookings %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Booking</th><th>Patient</th><th>Emergency</th><th>Pickup</th><th>Status</th><th></th></tr></thead>
+      <tbody>{% for booking in bookings %}
+        <tr>
+          <td>{{ booking.pk }}</td><td>{{ booking.patient.name }}</td>
+          <td>{{ booking.emergency_type }}</td><td>{{ booking.location_address }}</td>
+          <td><span class="status">{{ booking.get_status_display }}</span></td>
+          <td><a class="button button-small" href="{% url 'drivers:booking' booking.pk %}">Open assignment</a></td>
+        </tr>
+      {% endfor %}</tbody>
+    </table></div>
+  {% else %}<p class="empty-state">No active assignments.</p>{% endif %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'js/gps_tracking.js' %}" defer></script>{% endblock %}

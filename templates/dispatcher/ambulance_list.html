@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Ambulances · Ambulance Dispatch{% endblock %}
+{% block content %}
+<div class="page-heading"><p class="eyebrow">Fleet</p><h1>Ambulances</h1></div>
+<section class="card">
+  <h2>Register an ambulance</h2>
+  <p class="muted">Driver accounts are created by an administrator in the admin site.</p>
+  <form method="post" action="{% url 'ambulances:create' %}" class="inline-fields">
+    {% csrf_token %}
+    {% for field in form %}
+      <div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>
+    {% endfor %}
+    <button class="button" type="submit">Register vehicle</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Registered fleet</h2>
+  {% if ambulances %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Vehicle</th><th>Driver</th><th>Availability</th><th>Patient onboard</th><th>Last GPS update</th></tr></thead>
+      <tbody>{% for ambulance in ambulances %}
+        <tr>
+          <td>{{ ambulance.vehicle_number }}</td><td>{{ ambulance.driver }}</td>
+          <td><span class="status">{{ ambulance.get_availability_status_display }}</span></td>
+          <td>{{ ambulance.get_patient_status_display }}</td>
+          <td>{% if ambulance.latitude is not None %}{{ ambulance.location_updated_at|date:"M j, H:i:s" }}{% else %}No location{% endif %}</td>
+        </tr>
+      {% endfor %}</tbody>
+    </table></div>
+  {% else %}<p class="empty-state">No ambulances have been registered.</p>{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Assigned booking · Ambulance Dispatch{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Driver assignment</p>
+  <h1>{{ booking.get_status_display }}</h1>
+  <p class="booking-id">{{ booking.pk }}</p>
+</section>
+<section class="details-grid">
+  <article class="card">
+    <h2>Patient details</h2>
+    <dl>
+      <dt>Name</dt><dd>{{ booking.patient.name }}</dd>
+      <dt>Caller contact</dt><dd><a href="tel:{{ booking.patient.contact_number }}">{{ booking.patient.contact_number }}</a></dd>
+      <dt>Relationship</dt><dd>{{ booking.patient.relationship|default:"Not provided" }}</dd>
+      <dt>Patient count</dt><dd>{{ booking.patient.number_of_patients }}</dd>
+      {% if booking.patient.number_of_patients == 1 %}
+        <dt>Age</dt><dd>{{ booking.patient.age }}</dd><dt>Gender</dt><dd>{{ booking.patient.gender }}</dd>
+      {% endif %}
+    </dl>
+  </article>
+  <article class="card">
+    <h2>Pickup information</h2>
+    <dl><dt>Emergency</dt><dd>{{ booking.emergency_type }}</dd><dt>Address</dt><dd>{{ booking.location_address }}</dd></dl>
+    {% if booking.latitude is not None and booking.longitude is not None %}
+      <a class="button button-secondary" href="https://www.openstreetmap.org/?mlat={{ booking.latitude }}&amp;mlon={{ booking.longitude }}#map=16/{{ booking.latitude }}/{{ booking.longitude }}" target="_blank" rel="noopener noreferrer">Open pickup map</a>
+    {% endif %}
+  </article>
+</section>
+<section class="card">
+  <h2>Update response status</h2>
+  {% if form.status.field.choices %}
+    <form method="post" class="inline-fields">
+      {% csrf_token %}
+      <div class="field">{{ form.status.label_tag }}{{ form.status }}{{ form.status.errors }}</div>
+      <button class="button" type="submit">Update status</button>
+    </form>
+  {% else %}<p class="muted">No further driver status updates are available.</p>{% endif %}
+</section>
+{% endblock %}

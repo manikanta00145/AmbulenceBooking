@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}New emergency · Ambulance Dispatch{% endblock %}
+{% block content %}
+<section class="form-card">
+  <p class="eyebrow">Call taker</p>
+  <h1>Record an emergency request</h1>
+  <p class="muted">Age and gender are required for one patient. For multiple patients, those fields are omitted.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% for field in form %}
+      {% if field.name == "gender" or field.name == "age" %}
+        <div class="field patient-detail-field">
+      {% else %}
+        <div class="field">
+      {% endif %}
+        {{ field.label_tag }}
+        {{ field }}
+        {{ field.errors }}
+      </div>
+    {% endfor %}
+    <button class="button" type="submit">Save emergency request</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'js/booking.js' %}" defer></script>{% endblock %}

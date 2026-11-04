@@ -1,0 +1,54 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Ambulance Dispatch{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'css/forms.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="{% url 'home' %}">Ambulance Dispatch</a>
+    <nav aria-label="Main navigation">
+      {% if user.is_authenticated %}
+        {% if user.role == "DISPATCHER" %}
+          <a href="{% url 'dispatcher:dashboard' %}">Dashboard</a>
+          <a href="{% url 'dispatcher:bookings' %}">Bookings</a>
+          <a href="{% url 'dispatcher:ambulances' %}">Ambulances</a>
+        {% elif user.role == "DRIVER" %}
+          <a href="{% url 'drivers:dashboard' %}">Driver dashboard</a>
+        {% else %}
+          <a href="{% url 'patients:create' %}">New emergency</a>
+        {% endif %}
+        <span class="user-label">{{ user.get_full_name|default:user.username }}</span>
+        <form class="inline-form" action="{% url 'accounts:logout' %}" method="post">
+          {% csrf_token %}
+          <button class="link-button" type="submit">Log out</button>
+        </form>
+      {% else %}
+        <a href="{% url 'accounts:login' %}">Log in</a>
+        <a href="{% url 'accounts:register' %}">Register</a>
+      {% endif %}
+    </nav>
+  </header>
+  <main class="page">
+    {% if messages %}
+      <div class="messages" aria-live="polite">
+        {% for message in messages %}
+          <p class="message {{ message.tags }}">{{ message }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    Academic/demo system only — not a replacement for a functioning emergency helpline.
+  </footer>
+  <script src="{% static 'js/main.js' %}" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

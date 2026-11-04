@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Pending bookings · Ambulance Dispatch{% endblock %}
+{% block content %}
+<div class="page-heading"><p class="eyebrow">Operations</p><h1>Pending emergency requests</h1></div>
+<section class="card">
+  {% if bookings %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Request</th><th>Patient</th><th>Emergency / pickup</th><th>Nearest eligible</th><th>Assign</th></tr></thead>
+      <tbody>{% for booking in bookings %}
+        <tr>
+          <td><a href="{% url 'bookings:detail' booking.pk %}">{{ booking.pk }}</a><br><small>{{ booking.requested_at|date:"M j, H:i" }}</small></td>
+          <td>{{ booking.patient.name }}<br><small>{{ booking.patient.contact_number }}</small></td>
+          <td>{{ booking.emergency_type }}<br><small>{{ booking.location_address }}</small></td>
+          <td>
+            {% if booking.nearest_ambulance %}
+              <strong>{{ booking.nearest_ambulance.vehicle_number }}</strong><br>
+              <small>{{ booking.nearest_ambulance.driver }} · closest by straight-line distance</small>
+            {% else %}<span class="muted">No fresh, eligible GPS location</span>{% endif %}
+          </td>
+          <td>
+            {% if booking.nearest_ambulance %}
+              <form method="post" action="{% url 'dispatcher:assign' booking.pk %}" class="assignment-form">
+                {% csrf_token %}
+                {{ booking.assignment_form.ambulance }}
+                <button class="button button-small" type="submit">Assign</button>
+              </form>
+            {% else %}<a href="{% url 'dispatcher:ambulances' %}">Check ambulance status</a>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}</tbody>
+    </table></div>
+  {% else %}<p class="empty-state">There are no pending requests.</p>{% endif %}
+</section>
+{% endblock %}

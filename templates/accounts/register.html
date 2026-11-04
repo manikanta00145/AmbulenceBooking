@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Register · Ambulance Dispatch{% endblock %}
+{% block content %}
+<section class="form-card narrow">
+  <h1>Create a call-taker account</h1>
+  <p class="muted">Dispatcher and driver accounts must be created by an administrator.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% for field in form %}
+      <div class="field">
+        {{ field.label_tag }}
+        {{ field }}
+        {{ field.errors }}
+        {% if field.help_text %}<small>{{ field.help_text|safe }}</small>{% endif %}
+      </div>
+    {% endfor %}
+    <button class="button" type="submit">Create account</button>
+  </form>
+</section>
+{% endblock %}

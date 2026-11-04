@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Booking {{ booking.pk }} · Ambulance Dispatch{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Booking confirmation</p>
+  <h1>Request recorded</h1>
+  <p class="booking-id">{{ booking.pk }}</p>
+</section>
+<section class="details-grid">
+  <article class="card">
+    <h2>Patient and caller</h2>
+    <dl>
+      <dt>Patient</dt><dd>{{ booking.patient.name }}</dd>
+      <dt>Contact</dt><dd>{{ booking.patient.contact_number }}</dd>
+      <dt>Relationship</dt><dd>{{ booking.patient.relationship|default:"Not provided" }}</dd>
+      <dt>Number of patients</dt><dd>{{ booking.patient.number_of_patients }}</dd>
+      {% if booking.patient.number_of_patients == 1 %}
+        <dt>Age</dt><dd>{{ booking.patient.age }}</dd>
+        <dt>Gender</dt><dd>{{ booking.patient.gender }}</dd>
+      {% endif %}
+    </dl>
+  </article>
+  <article class="card">
+    <h2>Emergency and response</h2>
+    <dl>
+      <dt>Emergency type</dt><dd>{{ booking.emergency_type }}</dd>
+      <dt>Pickup address</dt><dd>{{ booking.location_address }}</dd>
+      <dt>Status</dt><dd><span class="status">{{ booking.get_status_display }}</span></dd>
+      <dt>Requested</dt><dd>{{ booking.requested_at|date:"M j, Y H:i" }}</dd>
+      <dt>Ambulance</dt><dd>{{ booking.assigned_ambulance|default:"Not assigned yet" }}</dd>
+    </dl>
+  </article>
+</section>
+{% if booking.status_history.all %}
+<section class="card">
+  <h2>Status history</h2>
+  <ol class="timeline">
+    {% for event in booking.status_history.all %}
+      <li><strong>{{ event.get_new_status_display }}</strong> · {{ event.changed_at|date:"M j, Y H:i" }}{% if event.changed_by %} by {{ event.changed_by }}{% endif %}</li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+{% endblock %}

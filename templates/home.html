@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Home · Ambulance Dispatch{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">Emergency request coordination</p>
+  <h1>Ambulance dispatch, made clear.</h1>
+  <p>Record emergency requests, coordinate available vehicles, and keep drivers and dispatchers in sync.</p>
+  {% if user.is_authenticated %}
+    {% if user.role == "CALL_TAKER" %}
+      <a class="button" href="{% url 'patients:create' %}">Create an emergency request</a>
+    {% elif user.role == "DISPATCHER" %}
+      <a class="button" href="{% url 'dispatcher:dashboard' %}">Open dispatcher dashboard</a>
+    {% else %}
+      <a class="button" href="{% url 'drivers:dashboard' %}">Open driver dashboard</a>
+    {% endif %}
+  {% else %}
+    <a class="button" href="{% url 'accounts:login' %}">Log in to continue</a>
+    <a class="button button-secondary" href="{% url 'accounts:register' %}">Create call-taker account</a>
+  {% endif %}
+</section>
+<section class="card-grid">
+  <article class="card"><h2>Call takers</h2><p>Capture caller details, patient count, emergency type, and pickup location.</p></article>
+  <article class="card"><h2>Dispatchers</h2><p>Review incoming requests, compare nearby available ambulances, and assign a vehicle.</p></article>
+  <article class="card"><h2>Drivers</h2><p>Accept an assignment, share GPS location, and update the booking as the response progresses.</p></article>
+</section>
+{% endblock %}
