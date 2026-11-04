@@ -21,5 +21,13 @@ class BookingAdmin(admin.ModelAdmin):
 
 @admin.register(AmbulanceAssignment)
 class AmbulanceAssignmentAdmin(admin.ModelAdmin):
-    list_display = ("booking", "ambulance", "assigned_by", "assigned_at", "released_at")
+    list_display = (
+        "booking",
+        "ambulance",
+        "assigned_by",
+        "assigned_at",
+        "assignment_status",
+        "released_at",
+    )
+    list_filter = ("assignment_status",)
     readonly_fields = ("assigned_at",)

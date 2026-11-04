@@ -9,3 +9,13 @@ class DispatcherUniquenessTests(TestCase):
         User.objects.create_user(username="dispatcher-one", role=User.Role.DISPATCHER)
         with self.assertRaises(IntegrityError), transaction.atomic():
             User.objects.create_user(username="dispatcher-two", role=User.Role.DISPATCHER)
+
+    def test_role_changes_keep_the_database_dispatcher_constraint_consistent(self):
+        user = User.objects.create_user(username="dispatcher")
+        user.role = User.Role.DISPATCHER
+        user.save(update_fields=["role"])
+        user.refresh_from_db()
+        self.assertEqual(user.dispatcher_slot, "D")
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            User.objects.filter(pk=user.pk).update(role=User.Role.CALL_TAKER)

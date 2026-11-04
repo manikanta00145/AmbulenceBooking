@@ -17,7 +17,7 @@ def update_booking_status(*, booking_id, new_status, driver):
         raise ValidationError("This booking has no assigned ambulance.")
     ambulance = Ambulance.objects.select_for_update().get(
         pk=booking.assigned_ambulance_id,
-        driver=driver,
+        driver__user=driver,
     )
     if not AmbulanceAssignment.objects.filter(
         booking=booking,
@@ -47,7 +47,7 @@ def update_availability(*, driver, availability_status):
     if availability_status not in Ambulance.Availability.values:
         raise ValidationError("Select a valid availability status.")
 
-    ambulance = Ambulance.objects.select_for_update().get(driver=driver)
+    ambulance = Ambulance.objects.select_for_update().get(driver__user=driver)
     if AmbulanceAssignment.objects.filter(
         ambulance=ambulance,
         released_at__isnull=True,

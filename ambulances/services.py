@@ -18,7 +18,7 @@ def publish_ambulance_update(ambulance):
     location = {
         "id": ambulance.pk,
         "vehicle_number": ambulance.vehicle_number,
-        "driver": ambulance.driver.get_full_name() or ambulance.driver.username,
+        "driver": ambulance.driver.driver_name or ambulance.driver.user.username,
         "latitude": float(ambulance.latitude) if ambulance.latitude is not None else None,
         "longitude": float(ambulance.longitude) if ambulance.longitude is not None else None,
         "availability": ambulance.availability_status,
@@ -62,9 +62,9 @@ def find_nearest_ambulance(patient_latitude, patient_longitude):
         latitude__isnull=False,
         longitude__isnull=False,
         location_updated_at__gte=cutoff,
-        driver__is_active=True,
-        driver__role="DRIVER",
-    ).select_related("driver")
+        driver__user__is_active=True,
+        driver__user__role="DRIVER",
+    ).select_related("driver__user")
     return min(
         candidates,
         key=lambda ambulance: calculate_distance(
@@ -89,7 +89,7 @@ def update_driver_location(*, driver, latitude, longitude):
     if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
         raise ValidationError("Coordinates are outside the valid range.")
 
-    ambulance = Ambulance.objects.select_for_update().get(driver=driver)
+    ambulance = Ambulance.objects.select_for_update().get(driver__user=driver)
     ambulance.latitude = latitude
     ambulance.longitude = longitude
     ambulance.location_updated_at = timezone.now()

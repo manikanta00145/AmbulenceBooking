@@ -22,19 +22,19 @@ class DriverBookingStatusTests(TestCase):
         patient = Patient.objects.create(
             name="Case",
             contact_number="555-0123",
-            number_of_patients=1,
             age=20,
             gender="Other",
         )
         self.booking = Booking.objects.create(
             patient=patient,
+            number_of_patients=1,
             emergency_type="Medical",
             location_address="1 Main Street",
             created_by=call_taker,
         )
         self.ambulance = Ambulance.objects.create(
             vehicle_number="AMB-002",
-            driver=self.driver,
+            driver=self.driver.driver_profile,
             latitude=12.0,
             longitude=77.0,
             location_updated_at=timezone.now(),

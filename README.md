@@ -6,10 +6,10 @@ A Django academic/demo application for call takers, a single dispatcher, and amb
 
 ## Local setup
 
-Requires Python 3.10+ and pip.
+Requires Python 3.10+, pip, and MySQL 8.0.16+.
 
 ```powershell
-python -m venv .venv
+py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
@@ -18,7 +18,9 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Open `http://127.0.0.1:8000/`. SQLite is used by default. Change the development-only values in `.env` before deployment.
+Run commands with `python` after activating `.venv`, or use `.\.venv\Scripts\python.exe manage.py ...` explicitly. Do not use `py manage.py ...`: the Windows `py` launcher may select a global interpreter without the project's dependencies.
+
+Open `http://127.0.0.1:8000/`. The project reads its MySQL connection settings from `.env`; never commit that file.
 
 On Windows with Python 3.15, Autobahn may attempt to compile an optional C extension without a local C++ toolchain. If dependency installation fails there, disable that optional extension for the install:
 
@@ -32,23 +34,55 @@ Remove-Item Env:AUTOBAHN_USE_NVX
 
 - Public registration creates **call-taker** accounts only.
 - Create driver accounts in Django admin (`/admin/`) and assign them the `Ambulance driver` role.
-- Change the initial superuser's role to `Dispatcher` in admin. A conditional database constraint ensures there can be only one dispatcher account.
+- Change the initial superuser's role to `Dispatcher` in admin. A unique database slot and check constraint enforce at most one dispatcher account on MySQL.
 - The dispatcher can register ambulances against active driver accounts.
 
-## MySQL (optional)
+## MySQL
 
-Install a compatible MySQL server and Python client (`python -m pip install mysqlclient`), create a UTF-8 database, then set the following values in `.env`:
+Install MySQL and the Python dependencies. Create the database and an application account in MySQL:
 
-```dotenv
-DB_ENGINE=django.db.backends.mysql
-DB_NAME=ambulance_db
-DB_USER=your_database_user
-DB_PASSWORD=your_database_password
-DB_HOST=localhost
-DB_PORT=3306
+```sql
+CREATE DATABASE ambulance_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'ambulance_app'@'localhost' IDENTIFIED BY 'use-a-unique-password';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES
+  ON ambulance_db.* TO 'ambulance_app'@'localhost';
 ```
 
-Then run `python manage.py migrate`. Keep credentials out of source control.
+Set the connection values in `.env` (the template is `.env.example`), then generate and apply migrations:
+
+```powershell
+python manage.py makemigrations
+python manage.py migrate
+python manage.py check --database default
+```
+
+The MySQL account needs database creation/drop privileges only if you intend to run Django's tests using MySQL's separate test database; use a distinct developer/test account for that. Keep credentials out of source control.
+
+To confirm the configured connection and tables:
+
+```powershell
+python manage.py showmigrations
+python manage.py dbshell
+```
+
+In `dbshell`, list the project's tables with:
+
+```sql
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'ambulance_db'
+ORDER BY table_name;
+```
+
+In MySQL Workbench, connect to the local server, refresh **Schemas**, expand `ambulance_db` → **Tables**, and refresh the table list.
+
+## Database relationships
+
+- Each `Driver` has one Django `User`; each `Ambulance` is assigned to one driver profile.
+- Each `Booking` references its patient and call-taker. Patient records are protected from deletion while bookings refer to them.
+- `AmbulanceAssignment` records the booking, ambulance, and dispatcher; nullable unique active keys ensure a booking and ambulance cannot each have multiple active assignments on MySQL.
+- `GPSLocation` records belong to an ambulance and are deleted with it. Booking status history is retained with its booking.
+- Dispatcher role uniqueness is enforced by a unique database slot and a check constraint; the application's role checks protect call-taker, dispatcher, and driver views/actions.
 
 ## Workflow
 

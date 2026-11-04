@@ -1,7 +1,7 @@
 from django import forms
 
-from accounts.models import User
 from ambulances.models import Ambulance
+from drivers.models import Driver
 
 
 class AmbulanceCreateForm(forms.ModelForm):
@@ -11,8 +11,8 @@ class AmbulanceCreateForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["driver"].queryset = User.objects.filter(
-            role=User.Role.DRIVER,
-            is_active=True,
+        self.fields["driver"].queryset = Driver.objects.filter(
+            user__role="DRIVER",
+            user__is_active=True,
             ambulance__isnull=True,
-        ).order_by("username")
+        ).select_related("user").order_by("user__username")

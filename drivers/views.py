@@ -14,7 +14,7 @@ from drivers.services import update_availability, update_booking_status
 
 @role_required("DRIVER")
 def dashboard(request):
-    ambulance = get_object_or_404(Ambulance, driver=request.user)
+    ambulance = get_object_or_404(Ambulance, driver__user=request.user)
     bookings = Booking.objects.filter(
         assigned_ambulance=ambulance,
         status__in=[
@@ -41,7 +41,7 @@ def dashboard(request):
 
 @role_required("DRIVER")
 def assigned_booking(request, booking_id):
-    ambulance = get_object_or_404(Ambulance, driver=request.user)
+    ambulance = get_object_or_404(Ambulance, driver__user=request.user)
     booking = get_object_or_404(
         Booking.objects.select_related("patient", "assigned_ambulance"),
         pk=booking_id,

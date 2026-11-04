@@ -18,6 +18,7 @@ def create_request(request):
                 patient = form.save_patient()
                 booking = Booking.objects.create(
                     patient=patient,
+                    number_of_patients=form.cleaned_data["number_of_patients"],
                     emergency_type=form.cleaned_data["emergency_type"],
                     location_address=form.cleaned_data["location_address"],
                     latitude=form.cleaned_data["latitude"],

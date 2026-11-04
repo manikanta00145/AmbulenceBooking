@@ -98,7 +98,7 @@ def live_locations(request):
         {
             "id": ambulance.pk,
             "vehicle_number": ambulance.vehicle_number,
-            "driver": ambulance.driver.get_full_name() or ambulance.driver.username,
+            "driver": ambulance.driver.driver_name or ambulance.driver.user.username,
             "latitude": float(ambulance.latitude),
             "longitude": float(ambulance.longitude),
             "availability": ambulance.availability_status,
@@ -108,7 +108,7 @@ def live_locations(request):
         for ambulance in Ambulance.objects.filter(
             latitude__isnull=False,
             longitude__isnull=False,
-        ).select_related("driver")
+        ).select_related("driver__user")
     ]
     response = JsonResponse({"locations": locations})
     response["Cache-Control"] = "private, no-store"

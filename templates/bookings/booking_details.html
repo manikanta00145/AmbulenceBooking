@@ -13,8 +13,8 @@
       <dt>Patient</dt><dd>{{ booking.patient.name }}</dd>
       <dt>Contact</dt><dd>{{ booking.patient.contact_number }}</dd>
       <dt>Relationship</dt><dd>{{ booking.patient.relationship|default:"Not provided" }}</dd>
-      <dt>Number of patients</dt><dd>{{ booking.patient.number_of_patients }}</dd>
-      {% if booking.patient.number_of_patients == 1 %}
+      <dt>Number of patients</dt><dd>{{ booking.number_of_patients }}</dd>
+      {% if booking.number_of_patients == 1 %}
         <dt>Age</dt><dd>{{ booking.patient.age }}</dd>
         <dt>Gender</dt><dd>{{ booking.patient.gender }}</dd>
       {% endif %}

@@ -50,6 +50,7 @@ class EmergencyRequestFormTests(TestCase):
         self.assertEqual(response.status_code, 302)
         booking = Booking.objects.get()
         self.assertEqual(booking.patient.name, "Alex Patient")
+        self.assertEqual(booking.number_of_patients, 1)
         self.assertEqual(booking.created_by, call_taker)
         self.assertEqual(booking.status, Booking.Status.PENDING)
         self.assertEqual(

@@ -26,7 +26,10 @@ def assign_ambulance(*, booking_id, ambulance_id, dispatcher):
         raise ValidationError("The selected ambulance has no GPS coordinates.")
     if ambulance.location_updated_at < timezone.now() - GPS_MAX_AGE:
         raise ValidationError("The selected ambulance GPS location is stale.")
-    if not ambulance.driver.is_active or ambulance.driver.role != ambulance.driver.Role.DRIVER:
+    if (
+        not ambulance.driver.user.is_active
+        or ambulance.driver.user.role != ambulance.driver.user.Role.DRIVER
+    ):
         raise ValidationError("The selected ambulance does not have an active driver.")
     if AmbulanceAssignment.objects.filter(ambulance=ambulance, released_at__isnull=True).exists():
         raise ValidationError("The selected ambulance already has an active assignment.")

@@ -18,7 +18,7 @@ def detail(request, booking_id):
     visible_to_assigned_driver = (
         request.user.role == request.user.Role.DRIVER
         and booking.assigned_ambulance_id is not None
-        and booking.assigned_ambulance.driver_id == request.user.pk
+        and booking.assigned_ambulance.driver.user_id == request.user.pk
     )
     if not (
         request.user.is_superuser

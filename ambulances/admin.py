@@ -20,5 +20,5 @@ class AmbulanceAdmin(admin.ModelAdmin):
         "location_updated_at",
     )
     list_filter = ("availability_status", "patient_status")
-    search_fields = ("vehicle_number", "driver__username")
+    search_fields = ("vehicle_number", "driver__user__username", "driver__driver_name")
     inlines = [GPSLocationInline]

@@ -53,7 +53,6 @@ class EmergencyRequestForm(forms.Form):
             name=self.cleaned_data["name"],
             contact_number=self.cleaned_data["contact_number"],
             relationship=self.cleaned_data["relationship"],
-            number_of_patients=self.cleaned_data["number_of_patients"],
             gender=self.cleaned_data["gender"],
             age=self.cleaned_data["age"],
         )

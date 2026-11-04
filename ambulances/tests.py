@@ -17,21 +17,21 @@ class DistanceTests(TestCase):
         driver_stale = User.objects.create_user(username="stale", role=User.Role.DRIVER)
         nearest = Ambulance.objects.create(
             vehicle_number="AMB-NEAR",
-            driver=driver_near,
+            driver=driver_near.driver_profile,
             latitude=12.01,
             longitude=77.0,
             location_updated_at=timezone.now(),
         )
         Ambulance.objects.create(
             vehicle_number="AMB-FAR",
-            driver=driver_far,
+            driver=driver_far.driver_profile,
             latitude=15.0,
             longitude=77.0,
             location_updated_at=timezone.now(),
         )
         Ambulance.objects.create(
             vehicle_number="AMB-STALE",
-            driver=driver_stale,
+            driver=driver_stale.driver_profile,
             latitude=12.001,
             longitude=77.0,
             location_updated_at=timezone.now() - timedelta(minutes=10),
