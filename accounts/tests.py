@@ -19,3 +19,13 @@ class DispatcherUniquenessTests(TestCase):
 
         with self.assertRaises(IntegrityError), transaction.atomic():
             User.objects.filter(pk=user.pk).update(role=User.Role.CALL_TAKER)
+
+
+class RoleAuthorisationTests(TestCase):
+    def test_superuser_is_allowed_through_role_checks(self):
+        user = User.objects.create_superuser(username="admin", password="secret123")
+        self.client.force_login(user)
+
+        response = self.client.get("/dispatcher/")
+
+        self.assertEqual(response.status_code, 200)

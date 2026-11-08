@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Staff account approvals · Ambulance Dispatch{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/admin-approvals.css' %}">{% endblock %}
+{% block content %}
+<section class="approval-page">
+  <header class="approval-heading">
+    <div>
+      <p class="approval-eyebrow">ADMINISTRATION</p>
+      <h1>Staff account approvals</h1>
+      <p>Review and manage access for each operational portal.</p>
+    </div>
+    <span class="admin-badge">Authorised administrator</span>
+  </header>
+
+  {% for section in sections %}
+    <section class="approval-section" id="{{ section.role|lower }}">
+      <div class="section-heading">
+        <h2>{{ section.title }}</h2>
+      </div>
+      <div class="approval-counts" aria-label="{{ section.title }} account counts">
+        <div class="count-card count-pending"><span>Pending</span><strong>{{ section.pending_count }}</strong></div>
+        <div class="count-card count-approved"><span>Approved</span><strong>{{ section.approved_count }}</strong></div>
+        <div class="count-card count-rejected"><span>Rejected</span><strong>{{ section.rejected_count }}</strong></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Employee ID</th><th>Username</th><th>Phone</th><th>Registered</th>
+              <th>Role</th>
+              {% if section.role == "DRIVER" %}
+                <th>Ambulance</th><th>Driving licence</th>
+              {% elif section.role == "CALL_TAKER" %}
+                <th>Office/Station</th><th>Emergency centre</th>
+              {% else %}
+                <th>Dispatch centre</th><th>Designation</th>
+              {% endif %}
+              <th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for account in section.accounts %}
+              <tr>
+                <td>{{ account.employee_id|default:"—" }}</td>
+                <td>{{ account.username }}</td>
+                <td>{{ account.phone_number|default:"—" }}</td>
+                <td>{{ account.date_joined|date:"M j, Y H:i" }}</td>
+                <td>{{ account.get_role_display }}</td>
+                {% if section.role == "DRIVER" %}
+                  <td>{{ account.driver_profile.ambulance.vehicle_number|default:"—" }}</td>
+                  <td>{{ account.driver_profile.license_number|default:"—" }}</td>
+                {% elif section.role == "CALL_TAKER" %}
+                  <td>{{ account.call_taker_office|default:"—" }}</td>
+                  <td>{{ account.assigned_emergency_centre|default:"—" }}</td>
+                {% else %}
+                  <td>{{ account.dispatch_centre|default:"—" }}</td>
+                  <td>{{ account.designation|default:"—" }}</td>
+                {% endif %}
+                <td><span class="status-badge status-{{ account.approval_status|lower }}">{{ account.get_approval_status_display }}</span></td>
+                <td class="approval-actions">
+                  <a class="action-link" href="{% url 'accounts:approval_account_detail' account.pk %}">View details</a>
+                  {% if account.approval_status != "APPROVED" %}
+                    <form method="post" action="{% url 'accounts:review_registration' account.pk 'approve' %}"
+                          onsubmit="return confirm('Approve this staff account?');">
+                      {% csrf_token %}<button class="action-button approve-button" type="submit">Approve</button>
+                    </form>
+                  {% endif %}
+                  {% if account.approval_status != "REJECTED" %}
+                    <form method="post" action="{% url 'accounts:review_registration' account.pk 'reject' %}"
+                          onsubmit="return confirm('Reject this staff account?');">
+                      {% csrf_token %}<button class="action-button reject-button" type="submit">Reject</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td class="empty-row" colspan="9">No accounts are registered for this portal.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endfor %}
+</section>
+{% endblock %}

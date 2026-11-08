@@ -1,0 +1,129 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071b2b">
+  <title>{{ portal_title }} registration · AmbulanceBooking</title>
+  <link rel="stylesheet" href="{% static 'css/portal-auth.css' %}">
+  <script src="{% static 'js/portal-auth.js' %}" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="{% url 'home' %}" aria-label="AmbulanceBooking home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none">
+          <path d="M24 4v40M4 24h40" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>
+          <path d="M24 4v40M4 24h40" stroke="#071b2b" stroke-width="2" stroke-linecap="round"/>
+          <path d="M24 9c-4 0-6 3-6 6 0 4 6 9 6 9s6-5 6-9c0-3-2-6-6-6Z" fill="white"/>
+          <path d="M24 15v17" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span>Ambulance<span class="brand-accent">Booking</span></span>
+    </a>
+
+    <nav class="top-links" aria-label="Account navigation">
+      <span class="nav-login active" aria-current="page">{{ portal_title }} registration</span>
+      <a class="nav-home" href="{% url 'home' %}">Home</a>
+    </nav>
+  </header>
+
+  <main class="page-shell registration-shell">
+    <section class="login-card registration-card" aria-labelledby="registration-title">
+      <div class="card-glow" aria-hidden="true"></div>
+      <div class="card-heading">
+        <div class="eyebrow"><span class="status-dot"></span> SECURE {{ portal_role_label }} ACCESS</div>
+        <h1 id="registration-title">Create account<span>.</span></h1>
+        <p>Register for your {{ portal_title|lower }} workspace. Access starts after administrator approval.</p>
+      </div>
+
+      {% if form.non_field_errors %}
+        <div class="form-error" role="alert">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <form
+        method="post"
+        class="login-form registration-form"
+        id="registrationForm"
+        data-send-otp-url="{% url send_otp_url_name %}"
+        data-verify-otp-url="{% url verify_otp_url_name %}"
+        data-verified-phone="{{ verified_phone|default:'' }}"
+      >
+        {% csrf_token %}
+
+        {% for field in form %}
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          <div class="input-wrap{% if field.name == 'password1' or field.name == 'password2' %} password-wrap{% endif %}">
+            {% if field.name == "full_name" or field.name == "username" %}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-3.4 2.8-5.2 7-5.2s6.5 1.8 7 5.2"/></svg>
+            {% elif field.name == "employee_id" %}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4.5" width="16" height="15" rx="2"/><path d="M8 9h8M8 13h5"/></svg>
+            {% elif field.name == "phone_number" %}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h3l1.5 4-2 1.7a15 15 0 0 0 5.3 5.3l1.7-2 4 1.5v3c0 1.1-.9 2-2 2C10 19 5 14 5 5.5c0-1.1.9-2 2-2Z"/></svg>
+            {% elif field.name == "ambulance_number" %}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="1.5"/><circle cx="18" cy="18" r="1.5"/><path d="M7 10v4m-2-2h4"/></svg>
+            {% elif field.name == "driving_licence_number" %}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.5-1.5 1.5-2 3-2s2.5.5 3 2m3-5h3m-3 3h3"/></svg>
+            {% elif field.name == "password1" or field.name == "password2" %}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            {% else %}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4.5" width="16" height="15" rx="2"/><path d="M8 9h8M8 13h5"/></svg>
+            {% endif %}
+            {{ field }}
+            {% if field.name == "password1" or field.name == "password2" %}
+              <button
+                class="password-toggle"
+                type="button"
+                data-password-toggle
+                data-password-target="{{ field.id_for_label }}"
+                aria-label="Show password"
+                aria-pressed="false"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.3-6 9.5-6 9.5 6 9.5 6-3.3 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/></svg>
+              </button>
+            {% endif %}
+          </div>
+          {% if field.errors %}<div class="field-error" role="alert">{{ field.errors }}</div>{% endif %}
+
+          {% if field.name == "phone_number" %}
+            <div class="otp-actions">
+              <button class="otp-button" type="button" id="sendOtpButton">Send OTP</button>
+              <span class="otp-countdown" id="otpCountdown" aria-live="polite" hidden></span>
+              <button class="otp-button otp-resend" type="button" id="resendOtpButton" hidden>Resend OTP</button>
+            </div>
+            <div class="otp-entry" id="otpEntry" hidden>
+              <label for="otpCode">Verification Code</label>
+              <div class="input-wrap">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h.01M12 10h.01M17 10h.01M7 14h.01M12 14h.01M17 14h.01"/></svg>
+                <input id="otpCode" name="otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="Enter 6-digit code">
+                <button class="otp-button otp-verify" type="button" id="verifyOtpButton">Verify OTP</button>
+              </div>
+            </div>
+            <p class="otp-status" id="otpStatus" aria-live="polite"></p>
+          {% endif %}
+        {% endfor %}
+
+        <button class="submit-button" type="submit" id="submitButton">
+          <span>Create Account</span>
+          <span class="button-arrow" aria-hidden="true">→</span>
+        </button>
+      </form>
+
+      <div class="card-bottom">
+        <span class="secure-icon" aria-hidden="true">⌑</span>
+        Staff accounts require administrator approval
+      </div>
+      <p class="registration-prompt">
+        Already have an account?
+        <a href="{% url login_url_name %}">Log in</a>
+      </p>
+    </section>
+
+    <p class="page-note"><span aria-hidden="true"></span> AMBULANCE RESPONSE · {{ portal_role_label }} OPERATIONS</p>
+  </main>
+</body>
+</html>

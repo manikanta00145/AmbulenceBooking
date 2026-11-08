@@ -30,12 +30,16 @@ python -m pip install -r requirements.txt
 Remove-Item Env:AUTOBAHN_USE_NVX
 ```
 
-## Roles and initial accounts
+## Roles, registration, and account approval
 
-- Public registration creates **call-taker** accounts only.
-- Create driver accounts in Django admin (`/admin/`) and assign them the `Ambulance driver` role.
-- Change the initial superuser's role to `Dispatcher` in admin. A unique database slot and check constraint enforce at most one dispatcher account on MySQL.
-- The dispatcher can register ambulances against active driver accounts.
+- Call takers, drivers, and dispatchers have separate registration forms. Every form requires phone OTP verification; driver registrations also collect an AP ambulance registration and driving licence, call takers provide their office/station and assigned emergency centre, and dispatchers provide their dispatch centre and designation.
+- In local development, set `DJANGO_DEBUG=true` in `.env` to use the development OTP backend. Click **Send OTP** and retrieve the code in the Django terminal. OTPs expire after five minutes, allow five attempts, and have a 60-second resend cooldown. The OTP is session-bound and stored as a password hash; it is never returned by the endpoint or printed unless `DEBUG` is enabled.
+- Production must set `REGISTRATION_OTP_DELIVERY_BACKEND` to a trusted SMS delivery backend implementing `send_registration_otp(phone_number, otp)`. The included console backend refuses to print codes when `DEBUG` is false.
+- The existing `users` table stores Employee IDs and call-taker/dispatcher details. Driver registrations use the existing `drivers` and `ambulances` tables for licence and ambulance number; no separate registration or OTP table is created.
+- Registrations are created inactive with a pending approval status and cannot sign in until an authorized administrator approves them. Authorized staff with the `accounts.view_user` and `accounts.change_user` permissions can use the central approval dashboard at `/accounts/admin/approvals/`; it separates drivers, call takers, and dispatchers, records reviewer/timestamps and optional rejection reasons, and disables rejected accounts. Django stores passwords using its configured password hashers.
+- Existing active accounts are preserved as approved when the approval migration runs. Existing inactive accounts are marked pending. Staff who register through a portal are never granted `is_staff` or superuser privileges.
+- The database enforces at most one dispatcher account. If a dispatcher account already exists, another dispatcher registration is rejected; manage the existing account in admin.
+- Driver profiles are created for driver-role accounts. Once approved, the dispatcher can register ambulances against active driver accounts.
 
 ## MySQL
 
@@ -48,10 +52,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES
   ON ambulance_db.* TO 'ambulance_app'@'localhost';
 ```
 
-Set the connection values in `.env` (the template is `.env.example`), then generate and apply migrations:
+Set the connection values in `.env` (the template is `.env.example`), then apply migrations. In particular, account migration `0004_user_employee_id` must be applied before registration queries `users.employee_id`; the approval fields are added by `0007_user_approval_status_and_audit`.
 
 ```powershell
-python manage.py makemigrations
 python manage.py migrate
 python manage.py check --database default
 ```

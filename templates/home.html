@@ -1,26 +1,88 @@
 {% extends "base.html" %}
-{% block title %}Home · Ambulance Dispatch{% endblock %}
+{% load static %}
+{% block title %}Ambulance Booking{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/home.css' %}">{% endblock %}
 {% block content %}
-<section class="hero">
-  <p class="eyebrow">Emergency request coordination</p>
-  <h1>Ambulance dispatch, made clear.</h1>
-  <p>Record emergency requests, coordinate available vehicles, and keep drivers and dispatchers in sync.</p>
-  {% if user.is_authenticated %}
-    {% if user.role == "CALL_TAKER" %}
-      <a class="button" href="{% url 'patients:create' %}">Create an emergency request</a>
-    {% elif user.role == "DISPATCHER" %}
-      <a class="button" href="{% url 'dispatcher:dashboard' %}">Open dispatcher dashboard</a>
-    {% else %}
-      <a class="button" href="{% url 'drivers:dashboard' %}">Open driver dashboard</a>
-    {% endif %}
-  {% else %}
-    <a class="button" href="{% url 'accounts:login' %}">Log in to continue</a>
-    <a class="button button-secondary" href="{% url 'accounts:register' %}">Create call-taker account</a>
-  {% endif %}
-</section>
-<section class="card-grid">
-  <article class="card"><h2>Call takers</h2><p>Capture caller details, patient count, emergency type, and pickup location.</p></article>
-  <article class="card"><h2>Dispatchers</h2><p>Review incoming requests, compare nearby available ambulances, and assign a vehicle.</p></article>
-  <article class="card"><h2>Drivers</h2><p>Accept an assignment, share GPS location, and update the booking as the response progresses.</p></article>
-</section>
+  <main class="homepage">
+    <div class="hero-art">
+      <img
+        class="hero-image"
+        src="{% static 'images/ambulence-homepage.png' %}"
+        alt="AmbulenceBooking emergency response homepage"
+      >
+
+      <nav class="login-hotspots" aria-label="Staff portal options">
+        {% if user.is_authenticated and user.role == "CALL_TAKER" %}
+          <a
+            class="hotspot call-taker"
+            href="{% url 'patients:create' %}"
+            aria-label="Open Call-Taker dashboard"
+          ></a>
+        {% else %}
+        <a
+          class="hotspot call-taker"
+          href="{% url 'accounts:call_taker_login' %}?next={% url 'patients:create' %}"
+          aria-label="Call-Taker Login"
+        ></a>
+        {% endif %}
+        {% if user.is_authenticated and user.role == "DISPATCHER" %}
+          <a
+            class="hotspot dispatcher"
+            href="{% url 'dispatcher:dashboard' %}"
+            aria-label="Open Dispatcher dashboard"
+          ></a>
+        {% else %}
+        <a
+          class="hotspot dispatcher"
+          href="{% url 'accounts:dispatcher_login' %}?next={% url 'dispatcher:dashboard' %}"
+          aria-label="Dispatcher Login"
+        ></a>
+        {% endif %}
+        {% if user.is_authenticated and user.role == "DRIVER" %}
+          <a
+            class="hotspot driver"
+            href="{% url 'drivers:dashboard' %}"
+            aria-label="Open Ambulance Driver dashboard"
+          ></a>
+        {% else %}
+        <a
+          class="hotspot driver"
+          href="{% url 'drivers:login' %}?next={% url 'drivers:dashboard' %}"
+          aria-label="Ambulance Driver Login"
+        ></a>
+        {% endif %}
+      </nav>
+    </div>
+
+    <section class="mobile-logins" aria-label="Choose your portal">
+      <h1>{% if user.is_authenticated %}Open Your Dashboard{% else %}Login to Continue{% endif %}</h1>
+      {% if user.is_authenticated and user.role == "CALL_TAKER" %}
+        <a href="{% url 'patients:create' %}" class="login-card call-card">
+          Call-Taker Dashboard <span aria-hidden="true">→</span>
+        </a>
+      {% else %}
+        <a href="{% url 'accounts:call_taker_login' %}?next={% url 'patients:create' %}" class="login-card call-card">
+        Call-Taker Login <span aria-hidden="true">→</span>
+        </a>
+      {% endif %}
+      {% if user.is_authenticated and user.role == "DISPATCHER" %}
+        <a href="{% url 'dispatcher:dashboard' %}" class="login-card dispatch-card">
+          Dispatcher Dashboard <span aria-hidden="true">→</span>
+        </a>
+      {% else %}
+        <a href="{% url 'accounts:dispatcher_login' %}?next={% url 'dispatcher:dashboard' %}" class="login-card dispatch-card">
+        Dispatcher Login <span aria-hidden="true">→</span>
+        </a>
+      {% endif %}
+      {% if user.is_authenticated and user.role == "DRIVER" %}
+        <a href="{% url 'drivers:dashboard' %}" class="login-card driver-card">
+          Ambulance Driver Dashboard <span aria-hidden="true">→</span>
+        </a>
+      {% else %}
+        <a href="{% url 'drivers:login' %}?next={% url 'drivers:dashboard' %}" class="login-card driver-card">
+        Ambulance Driver Login <span aria-hidden="true">→</span>
+        </a>
+      {% endif %}
+    </section>
+  </main>
 {% endblock %}

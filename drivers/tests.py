@@ -11,6 +11,49 @@ from drivers.services import update_availability, update_booking_status
 from patients.models import Patient
 
 
+class DriverLoginPageTests(TestCase):
+    def test_homepage_driver_login_link_uses_driver_login_page(self):
+        response = self.client.get(reverse("home"))
+        driver_login_url = reverse("drivers:login")
+        driver_dashboard_url = reverse("drivers:dashboard")
+
+        self.assertContains(
+            response,
+            f'href="{driver_login_url}?next={driver_dashboard_url}"',
+        )
+
+    def test_driver_login_page_uses_driver_specific_ui(self):
+        response = self.client.get(reverse("drivers:login"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sign in to continue to your driver dashboard.")
+        self.assertContains(response, "css/portal-auth.css")
+        self.assertContains(response, "js/portal-auth.js")
+
+    def test_driver_login_authenticates_and_redirects_to_dashboard(self):
+        driver = User.objects.create_user(
+            username="driver-login",
+            password="Test-pass123!",
+            role=User.Role.DRIVER,
+        )
+
+        response = self.client.post(
+            reverse("drivers:login"),
+            {
+                "username": driver.username,
+                "password": "Test-pass123!",
+                "next": reverse("drivers:dashboard"),
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("drivers:dashboard"),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(int(self.client.session["_auth_user_id"]), driver.pk)
+
+
 class DriverBookingStatusTests(TestCase):
     def setUp(self):
         self.dispatcher = User.objects.create_user(

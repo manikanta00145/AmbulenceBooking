@@ -10,25 +10,22 @@
   <link rel="stylesheet" href="{% static 'css/forms.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% if request.resolver_match and request.resolver_match.url_name == 'home' %}home-page{% endif %}">
   <header class="site-header">
     <a class="brand" href="{% url 'home' %}">Ambulance Dispatch</a>
     <nav aria-label="Main navigation">
       {% if user.is_authenticated %}
+        {% if user.is_staff and perms.accounts.view_user %}
+          <a href="{% url 'accounts:approval_dashboard' %}">Staff approvals</a>
+        {% endif %}
         {% if user.role == "DISPATCHER" %}
           <a href="{% url 'dispatcher:dashboard' %}">Dashboard</a>
           <a href="{% url 'dispatcher:bookings' %}">Bookings</a>
           <a href="{% url 'dispatcher:ambulances' %}">Ambulances</a>
         {% elif user.role == "DRIVER" %}
           <a href="{% url 'drivers:dashboard' %}">Driver dashboard</a>
-        {% else %}
-          <a href="{% url 'patients:create' %}">New emergency</a>
         {% endif %}
         <span class="user-label">{{ user.get_full_name|default:user.username }}</span>
-        <form class="inline-form" action="{% url 'accounts:logout' %}" method="post">
-          {% csrf_token %}
-          <button class="link-button" type="submit">Log out</button>
-        </form>
       {% else %}
         <a href="{% url 'accounts:login' %}">Log in</a>
         <a href="{% url 'accounts:register' %}">Register</a>

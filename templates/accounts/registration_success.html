@@ -1,0 +1,52 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071b2b">
+  <title>Registration submitted · AmbulanceBooking</title>
+  <link rel="stylesheet" href="{% static 'css/portal-auth.css' %}">
+  <link rel="stylesheet" href="{% static 'css/registration-success.css' %}">
+  <script src="{% static 'js/registration-success.js' %}" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="{% url 'home' %}" aria-label="AmbulanceBooking home">
+      <span class="brand-mark" aria-hidden="true">+</span>
+      <span>Ambulance<span class="brand-accent">Booking</span></span>
+    </a>
+    <nav class="top-links" aria-label="Account navigation">
+      <span class="active">{{ portal_title }} registration</span>
+      <a class="nav-home" href="{% url 'home' %}">Home</a>
+    </nav>
+  </header>
+  <main class="page-shell">
+    <section class="login-card registration-success" aria-labelledby="success-title"
+             data-registration-success data-redirect-url="{{ redirect_url }}">
+      <div class="card-glow" aria-hidden="true"></div>
+      <div class="success-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none">
+          <circle cx="24" cy="24" r="20" />
+          <path d="m14 24 7 7 14-15" />
+        </svg>
+      </div>
+      <div class="eyebrow"><span class="status-dot"></span> SECURE {{ portal_role_label }} ACCESS</div>
+      <h1 id="success-title">You're all set<span>.</span></h1>
+      {% if messages %}
+        <div class="messages" aria-live="polite">
+          {% for message in messages %}
+            <p class="message {{ message.tags }}">{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+      <p class="success-description">Your account is pending administrator approval. You can sign in once it has been approved.</p>
+      <p class="redirect-note">Taking you to the {{ portal_title|lower }} login page…</p>
+      <a class="success-login-link" href="{{ redirect_url }}">Continue to login now</a>
+    </section>
+    <p class="page-note"><span aria-hidden="true"></span> AMBULANCE RESPONSE · {{ portal_role_label }} OPERATIONS</p>
+  </main>
+</body>
+</html>

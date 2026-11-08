@@ -1,0 +1,110 @@
+.registration-success {
+  width: min(100%, 520px);
+  text-align: center;
+  animation: success-arrive .55s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.registration-success .eyebrow {
+  justify-content: center;
+}
+
+.registration-success h1 {
+  position: relative;
+  margin: 20px 0 14px;
+  color: #f3f8fc;
+  font-size: clamp(29px, 6vw, 38px);
+  letter-spacing: -1.4px;
+}
+
+.registration-success h1 span {
+  color: #43d8d0;
+}
+
+.success-mark {
+  display: grid;
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 20px;
+  place-items: center;
+  border: 1px solid rgba(100, 235, 159, .4);
+  border-radius: 50%;
+  background: rgba(32, 180, 103, .12);
+  box-shadow: 0 0 32px rgba(32, 180, 103, .18);
+  animation: success-pop .55s .12s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.success-mark svg {
+  width: 42px;
+  height: 42px;
+  stroke: #72edaa;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.success-mark circle {
+  fill: none;
+  stroke-width: 2;
+}
+
+.registration-success .messages {
+  margin: 20px 0 14px;
+}
+
+.registration-success .message.success {
+  padding: 14px 16px;
+  border: 1px solid rgba(94, 224, 148, .36);
+  border-radius: 12px;
+  color: #b8f5ce;
+  background: rgba(29, 151, 81, .15);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.55;
+  animation: notification-in .45s .2s ease both;
+}
+
+.success-description,
+.redirect-note {
+  color: #a9bfcc;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.redirect-note {
+  margin: 22px 0 14px;
+  color: #72edaa;
+}
+
+.success-login-link {
+  color: #43d8d0;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.success-login-link:hover {
+  text-decoration: underline;
+}
+
+@keyframes success-arrive {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes success-pop {
+  from { opacity: 0; transform: scale(.72); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes notification-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .registration-success,
+  .success-mark,
+  .registration-success .message.success {
+    animation: none;
+  }
+}

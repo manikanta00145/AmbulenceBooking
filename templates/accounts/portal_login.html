@@ -1,0 +1,103 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071b2b">
+  <title>{{ portal_title }} log in · AmbulanceBooking</title>
+  <link rel="stylesheet" href="{% static 'css/portal-auth.css' %}">
+  <script src="{% static 'js/portal-auth.js' %}" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="{% url 'home' %}" aria-label="AmbulanceBooking home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none">
+          <path d="M24 4v40M4 24h40" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>
+          <path d="M24 4v40M4 24h40" stroke="#071b2b" stroke-width="2" stroke-linecap="round"/>
+          <path d="M24 9c-4 0-6 3-6 6 0 4 6 9 6 9s6-5 6-9c0-3-2-6-6-6Z" fill="white"/>
+          <path d="M24 15v17" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span>Ambulance<span class="brand-accent">Booking</span></span>
+    </a>
+
+    <nav class="top-links" aria-label="Account navigation">
+      <span class="nav-login active" aria-current="page">{{ portal_title }} log in</span>
+      <a class="nav-home" href="{% url 'home' %}">Home</a>
+    </nav>
+  </header>
+
+  <main class="page-shell">
+    <section class="login-card" aria-labelledby="login-title">
+      <div class="card-glow" aria-hidden="true"></div>
+
+      <div class="card-heading">
+        <div class="eyebrow"><span class="status-dot"></span> SECURE {{ portal_role_label }} ACCESS</div>
+        <h1 id="login-title">Welcome back<span>.</span></h1>
+        <p>Sign in to continue to your {{ portal_title|lower }} dashboard.</p>
+      </div>
+
+      {% if messages %}
+        <div class="messages" aria-live="polite">
+          {% for message in messages %}
+            <p class="message {{ message.tags }}">{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% if form.non_field_errors %}
+        <div class="form-error" role="alert">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <form method="post" class="login-form" id="loginForm">
+        {% csrf_token %}
+        <label for="id_username">Username</label>
+        <div class="input-wrap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-3.4 2.8-5.2 7-5.2s6.5 1.8 7 5.2"/></svg>
+          {{ form.username }}
+        </div>
+        {% if form.username.errors %}<div class="field-error" role="alert">{{ form.username.errors }}</div>{% endif %}
+
+        <label for="id_password">Password</label>
+        <div class="input-wrap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          {{ form.password }}
+          <button
+            class="password-toggle"
+            type="button"
+            data-password-toggle
+            data-password-target="id_password"
+            aria-label="Show password"
+            aria-pressed="false"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.3-6 9.5-6 9.5 6 9.5 6-3.3 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/></svg>
+          </button>
+        </div>
+        {% if form.password.errors %}<div class="field-error" role="alert">{{ form.password.errors }}</div>{% endif %}
+
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <button class="submit-button" type="submit" id="submitButton">
+          <span>Log in to dashboard</span>
+          <span class="button-arrow" aria-hidden="true">→</span>
+        </button>
+      </form>
+
+      <div class="card-bottom">
+        <span class="secure-icon" aria-hidden="true">⌑</span>
+        Secure access for authorised ambulance {{ portal_title|lower }}s
+      </div>
+      <p class="registration-prompt">
+        Don't have an account?
+        <a href="{% url registration_url_name %}">Create Account</a>
+      </p>
+    </section>
+
+    <p class="page-note"><span aria-hidden="true"></span> AMBULANCE RESPONSE · {{ portal_role_label }} OPERATIONS</p>
+  </main>
+</body>
+</html>

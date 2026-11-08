@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Account review · Ambulance Dispatch{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/admin-approvals.css' %}">{% endblock %}
+{% block content %}
+<section class="approval-page approval-detail">
+  <a class="back-link" href="{% url 'accounts:approval_dashboard' %}">← Back to approvals</a>
+  <header class="approval-heading">
+    <div>
+      <p class="approval-eyebrow">{{ account.get_role_display|upper }} ACCOUNT</p>
+      <h1>{{ account.get_full_name|default:account.username }}</h1>
+      <p>Registered {{ account.date_joined|date:"F j, Y H:i" }}</p>
+    </div>
+    <span class="status-badge status-{{ account.approval_status|lower }}">{{ account.get_approval_status_display }}</span>
+  </header>
+  <div class="details-grid">
+    <div><span>Employee ID</span><strong>{{ account.employee_id|default:"—" }}</strong></div>
+    <div><span>Username</span><strong>{{ account.username }}</strong></div>
+    <div><span>Phone number</span><strong>{{ account.phone_number|default:"—" }}</strong></div>
+    <div><span>Role</span><strong>{{ account.get_role_display }}</strong></div>
+    {% for label, value in role_details %}
+      <div><span>{{ label }}</span><strong>{{ value|default:"—" }}</strong></div>
+    {% endfor %}
+    {% if account.approved_at %}
+      <div><span>Approved by</span><strong>{{ account.approved_by|default:"—" }}</strong></div>
+      <div><span>Approved at</span><strong>{{ account.approved_at|date:"F j, Y H:i" }}</strong></div>
+    {% endif %}
+    {% if account.rejected_at %}
+      <div><span>Rejected by</span><strong>{{ account.rejected_by|default:"—" }}</strong></div>
+      <div><span>Rejected at</span><strong>{{ account.rejected_at|date:"F j, Y H:i" }}</strong></div>
+      <div class="detail-wide"><span>Rejection reason</span><strong>{{ account.rejection_reason|default:"No reason provided." }}</strong></div>
+    {% endif %}
+  </div>
+  <div class="detail-actions">
+    {% if account.approval_status != "APPROVED" %}
+      <form method="post" action="{% url 'accounts:review_registration' account.pk 'approve' %}"
+            onsubmit="return confirm('Approve this staff account?');">
+        {% csrf_token %}<button class="action-button approve-button" type="submit">Approve account</button>
+      </form>
+    {% endif %}
+    {% if account.approval_status != "REJECTED" %}
+      <form method="post" action="{% url 'accounts:review_registration' account.pk 'reject' %}"
+            onsubmit="return confirm('Reject this staff account?');">
+        {% csrf_token %}
+        <label for="rejection_reason">Optional rejection reason</label>
+        <textarea id="rejection_reason" name="rejection_reason" rows="3" maxlength="2000"></textarea>
+        <button class="action-button reject-button" type="submit">Reject account</button>
+      </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
