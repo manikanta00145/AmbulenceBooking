@@ -4,9 +4,11 @@ A Django academic/demo application for call takers, a single dispatcher, and amb
 
 > This is not a replacement for a functioning emergency helpline. Do not rely on it for real emergency response without substantial operational, security, availability, and safety engineering.
 
+For Docker Desktop setup on Windows 11, see [DOCKER_SETUP.md](./DOCKER_SETUP.md).
+
 ## Local setup
 
-Requires Python 3.10+, pip, and MySQL 8.0.16+.
+Requires Python 3.10+, pip, and the database selected by `DB_ENGINE`. The supplied `.env.example` uses SQLite; MySQL 8.0.16+ is supported when `DB_ENGINE=mysql`.
 
 ```powershell
 py -m venv .venv
@@ -20,7 +22,7 @@ python manage.py runserver
 
 Run commands with `python` after activating `.venv`, or use `.\.venv\Scripts\python.exe manage.py ...` explicitly. Do not use `py manage.py ...`: the Windows `py` launcher may select a global interpreter without the project's dependencies.
 
-Open `http://127.0.0.1:8000/`. The project reads its MySQL connection settings from `.env`; never commit that file.
+Open `http://127.0.0.1:8000/`. The project reads its database settings from `.env`; never commit that file.
 
 On Windows with Python 3.15, Autobahn may attempt to compile an optional C extension without a local C++ toolchain. If dependency installation fails there, disable that optional extension for the install:
 
@@ -41,7 +43,9 @@ Remove-Item Env:AUTOBAHN_USE_NVX
 - The database enforces at most one dispatcher account. If a dispatcher account already exists, another dispatcher registration is rejected; manage the existing account in admin.
 - Driver profiles are created for driver-role accounts. Once approved, the dispatcher can register ambulances against active driver accounts.
 
-## MySQL
+## Optional MySQL setup
+
+Use this section only when configuring `DB_ENGINE=mysql`.
 
 Install MySQL and the Python dependencies. Create the database and an application account in MySQL:
 
