@@ -14,7 +14,9 @@ from drivers.services import update_availability, update_booking_status
 
 @role_required("DRIVER")
 def dashboard(request):
-    ambulance = get_object_or_404(Ambulance, driver__user=request.user)
+    ambulance = Ambulance.objects.filter(driver__user=request.user).first()
+    if ambulance is None:
+        return render(request, "drivers/no_ambulance.html")
     bookings = Booking.objects.filter(
         assigned_ambulance=ambulance,
         status__in=[

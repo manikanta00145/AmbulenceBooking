@@ -137,6 +137,17 @@ class DriverBookingStatusTests(TestCase):
         self.ambulance.refresh_from_db()
         self.assertEqual(float(self.ambulance.latitude), 13.25)
 
+    def test_driver_without_registered_ambulance_sees_setup_instructions(self):
+        driver = User.objects.create_user(username="unassigned-driver", role=User.Role.DRIVER)
+        self.client.force_login(driver)
+
+        response = self.client.get(reverse("drivers:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "drivers/no_ambulance.html")
+        self.assertContains(response, "No ambulance is registered for your account")
+        self.assertContains(response, "dispatch coordinator")
+
     def test_driver_can_toggle_availability_only_without_active_assignment(self):
         with self.assertRaises(ValidationError):
             update_availability(
