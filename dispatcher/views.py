@@ -2,21 +2,34 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from accounts.decorators import role_required
 from ambulances.forms import AmbulanceCreateForm
 from ambulances.models import Ambulance
-from ambulances.services import find_nearest_ambulance
-from bookings.models import Booking
+from ambulances.services import GPS_MAX_AGE, find_nearest_ambulance
+from bookings.models import Booking, BookingStatusHistory
 from bookings.services import assign_ambulance
 from dispatcher.forms import AssignmentForm
 
 
+ACTIVE_BOOKING_STATUSES = [
+    Booking.Status.PENDING,
+    Booking.Status.ASSIGNED,
+    Booking.Status.ACCEPTED,
+    Booking.Status.EN_ROUTE,
+    Booking.Status.ARRIVED,
+    Booking.Status.PATIENT_PICKED_UP,
+]
+
+
 @role_required("DISPATCHER")
 def dashboard(request):
-    bookings = Booking.objects.select_related("patient", "assigned_ambulance").order_by(
-        "requested_at"
-    )
+    active_bookings = Booking.objects.filter(status__in=ACTIVE_BOOKING_STATUSES).count()
+    completed_today = BookingStatusHistory.objects.filter(
+        new_status=Booking.Status.COMPLETED,
+        changed_at__date=timezone.localdate(),
+    ).count()
     return render(
         request,
         "dispatcher/dashboard.html",
@@ -29,17 +42,8 @@ def dashboard(request):
             "unavailable_ambulances": Ambulance.objects.filter(
                 availability_status=Ambulance.Availability.UNAVAILABLE
             ).count(),
-            "pending_bookings": Booking.objects.filter(status=Booking.Status.PENDING).count(),
-            "active_bookings": Booking.objects.filter(
-                status__in=[
-                    Booking.Status.ASSIGNED,
-                    Booking.Status.ACCEPTED,
-                    Booking.Status.EN_ROUTE,
-                    Booking.Status.ARRIVED,
-                    Booking.Status.PATIENT_PICKED_UP,
-                ]
-            ).count(),
-            "bookings": bookings[:10],
+            "active_bookings": active_bookings,
+            "completed_today": completed_today,
         },
     )
 
@@ -94,22 +98,134 @@ def ambulance_list(request):
 def live_locations(request):
     if request.method != "GET":
         return HttpResponseNotAllowed(["GET"])
+    now = timezone.now()
+    ambulances = list(
+        Ambulance.objects.select_related("driver__user").order_by("vehicle_number")
+    )
+    active_assignments = dict(
+        Booking.objects.filter(
+            status__in=ACTIVE_BOOKING_STATUSES,
+            assigned_ambulance__isnull=False,
+        ).values_list("assigned_ambulance_id", "pk")
+    )
     locations = [
         {
             "id": ambulance.pk,
             "vehicle_number": ambulance.vehicle_number,
             "driver": ambulance.driver.driver_name or ambulance.driver.user.username,
-            "latitude": float(ambulance.latitude),
-            "longitude": float(ambulance.longitude),
+            "driver_phone": ambulance.driver.phone_number or ambulance.driver.user.phone_number,
+            "latitude": float(ambulance.latitude) if ambulance.latitude is not None else None,
+            "longitude": float(ambulance.longitude) if ambulance.longitude is not None else None,
             "availability": ambulance.availability_status,
             "patient_status": ambulance.patient_status,
             "updated_at": ambulance.location_updated_at.isoformat(),
+            "gps_stale": (
+                ambulance.latitude is None
+                or ambulance.longitude is None
+                or ambulance.location_updated_at < now - GPS_MAX_AGE
+            ),
+            "active_booking_id": active_assignments.get(ambulance.pk),
         }
-        for ambulance in Ambulance.objects.filter(
-            latitude__isnull=False,
-            longitude__isnull=False,
-        ).select_related("driver__user")
+        for ambulance in ambulances
     ]
-    response = JsonResponse({"locations": locations})
+    active_bookings = Booking.objects.filter(
+        status__in=ACTIVE_BOOKING_STATUSES,
+    ).select_related(
+        "patient",
+        "assigned_ambulance__driver__user",
+    )
+    emergencies = []
+    for booking in active_bookings:
+        ambulance = booking.assigned_ambulance
+        driver = ambulance.driver if ambulance else None
+        suggested_ambulance = None
+        if (
+            booking.status == Booking.Status.PENDING
+            and ambulance is None
+            and booking.latitude is not None
+            and booking.longitude is not None
+        ):
+            suggested_ambulance = find_nearest_ambulance(
+                booking.latitude,
+                booking.longitude,
+            )
+        emergencies.append(
+            {
+                "id": str(booking.pk),
+                "patient": booking.patient.name,
+                "patient_phone": booking.patient.contact_number,
+                "address": booking.location_address,
+                "number_of_patients": booking.number_of_patients,
+                "latitude": float(booking.latitude) if booking.latitude is not None else None,
+                "longitude": float(booking.longitude) if booking.longitude is not None else None,
+                "requested_at": booking.requested_at.isoformat(),
+                "status": booking.status,
+                "ambulance_id": ambulance.pk if ambulance else None,
+                "ambulance": ambulance.vehicle_number if ambulance else None,
+                "driver": (
+                    driver.driver_name or driver.user.username
+                    if driver
+                    else None
+                ),
+                "driver_phone": (
+                    driver.phone_number or driver.user.phone_number
+                    if driver
+                    else None
+                ),
+                "ambulance_latitude": (
+                    float(ambulance.latitude)
+                    if ambulance and ambulance.latitude is not None
+                    else None
+                ),
+                "ambulance_longitude": (
+                    float(ambulance.longitude)
+                    if ambulance and ambulance.longitude is not None
+                    else None
+                ),
+                "last_location_update": (
+                    ambulance.location_updated_at.isoformat() if ambulance else None
+                ),
+                "gps_stale": (
+                    ambulance.latitude is None
+                    or ambulance.longitude is None
+                    or ambulance.location_updated_at < now - GPS_MAX_AGE
+                    if ambulance
+                    else True
+                ),
+                "suggested_ambulance": (
+                    {
+                        "id": suggested_ambulance.pk,
+                        "vehicle_number": suggested_ambulance.vehicle_number,
+                    }
+                    if suggested_ambulance
+                    else None
+                ),
+            }
+        )
+
+    completed_today = BookingStatusHistory.objects.filter(
+        new_status=Booking.Status.COMPLETED,
+        changed_at__date=timezone.localdate(),
+    ).count()
+    response = JsonResponse(
+        {
+            "locations": locations,
+            "emergencies": emergencies,
+            "stats": {
+                "total_ambulances": len(locations),
+                "available_ambulances": sum(
+                    location["availability"] == Ambulance.Availability.AVAILABLE
+                    and location["patient_status"] == Ambulance.PatientStatus.OFF
+                    for location in locations
+                ),
+                "busy_ambulances": sum(
+                    location["availability"] == Ambulance.Availability.UNAVAILABLE
+                    for location in locations
+                ),
+                "active_emergencies": len(emergencies),
+                "completed_today": completed_today,
+            },
+        }
+    )
     response["Cache-Control"] = "private, no-store"
     return response
