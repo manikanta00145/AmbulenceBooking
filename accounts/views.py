@@ -191,9 +191,7 @@ class CallTakerRegistrationView(PortalRegistrationView):
     login_url_name = "accounts:call_taker_login"
     send_otp_url_name = "accounts:call_taker_send_otp"
     verify_otp_url_name = "accounts:call_taker_verify_otp"
-    success_message = (
-        "Call-Taker account created successfully! Please wait for administrator approval."
-    )
+    success_message = "Call-Taker account created successfully! Please wait for administrator approval."
 
 
 class DispatcherRegistrationView(PortalRegistrationView):
@@ -204,9 +202,7 @@ class DispatcherRegistrationView(PortalRegistrationView):
     login_url_name = "accounts:dispatcher_login"
     send_otp_url_name = "accounts:dispatcher_send_otp"
     verify_otp_url_name = "accounts:dispatcher_verify_otp"
-    success_message = (
-        "Dispatcher account created successfully! Please wait for administrator approval."
-    )
+    success_message = "Dispatcher account created successfully! Please wait for administrator approval."
 
 
 class DriverRegistrationView(PortalRegistrationView):
@@ -217,9 +213,7 @@ class DriverRegistrationView(PortalRegistrationView):
     login_url_name = "drivers:login"
     send_otp_url_name = "drivers:send_otp"
     verify_otp_url_name = "drivers:verify_otp"
-    success_message = (
-        "Driver account created successfully! Please wait for administrator approval."
-    )
+    success_message = "Driver account created successfully! Please wait for administrator approval."
 
 
 @login_required

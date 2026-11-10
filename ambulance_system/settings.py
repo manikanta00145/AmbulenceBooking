@@ -80,8 +80,8 @@ else:
         "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
     }
 
-db_engine = os.environ.get("DB_ENGINE", "mysql").lower()
-if db_engine in {"sqlite", "sqlite3"}:
+db_engine = os.environ.get("DB_ENGINE", "sqlite3").strip().lower()
+if db_engine in {"sqlite", "sqlite3", "django.db.backends.sqlite3"}:
     db_name = os.environ.get("DB_NAME", "db.sqlite3")
     if db_name != ":memory:" and not os.path.isabs(db_name):
         db_name = str(BASE_DIR / db_name)
@@ -91,7 +91,7 @@ if db_engine in {"sqlite", "sqlite3"}:
             "NAME": db_name,
         }
     }
-else:
+elif db_engine in {"mysql", "django.db.backends.mysql"}:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",
@@ -102,6 +102,13 @@ else:
             "PORT": os.environ.get("DB_PORT", "3306"),
             "OPTIONS": {"charset": "utf8mb4"},
             "CONN_MAX_AGE": 60,
+        }
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": str(BASE_DIR / "db.sqlite3"),
         }
     }
 

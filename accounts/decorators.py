@@ -18,10 +18,9 @@ def role_required(*roles):
         @wraps(view)
         @login_required(login_url=login_url)
         def wrapped(request, *args, **kwargs):
-            if (
-                not request.user.is_active
-                or request.user.approval_status != User.ApprovalStatus.APPROVED
-            ):
+            if not request.user.is_active:
+                raise PermissionDenied
+            if request.user.approval_status != User.ApprovalStatus.APPROVED:
                 raise PermissionDenied
             if request.user.is_superuser:
                 return view(request, *args, **kwargs)
