@@ -93,12 +93,22 @@ In MySQL Workbench, connect to the local server, refresh **Schemas**, expand `am
 
 ## Workflow
 
-1. A call taker records caller/patient details and the pickup address; coordinates are optional.
-2. The dispatcher reviews pending requests and assigns an available ambulance with a fresh GPS fix (five minutes or newer). The nearest eligible vehicle is highlighted using straight-line Haversine distance.
+1. A call taker records caller/patient details and searches the pickup address using the OpenStreetMap Nominatim search service. The returned point is only a suggestion: the call taker must review it, adjust the draggable/clickable Leaflet pin if needed, and explicitly confirm the location before saving.
+2. The dispatcher reviews confirmed patient markers and assigns an available ambulance with a fresh GPS fix (five minutes or newer). Requests without confirmed coordinates cannot be assigned. The nearest eligible vehicle is highlighted using straight-line Haversine distance.
 3. The assigned driver accepts, travels, arrives, records pickup, and completes the booking.
 4. While the driver dashboard is open and GPS permission is granted, browser coordinates are sent to the server and broadcast to dispatcher dashboards over Django Channels. A 30-second HTTP refresh is retained as a fallback.
 
 Assignments and status transitions are recorded. Assignment operations use database transactions and row locks; production concurrency behavior depends on a database with effective row locking (such as MySQL or PostgreSQL), not SQLite.
+
+## Patient address lookup
+
+The call-taker portal makes one Nominatim search request only after the operator selects **Find location**; it does not autocomplete or send each keystroke. Successful addresses are cached in the application database for 30 days, and a shared MySQL row lock spaces uncached requests by at least one second across workers. Requests use a five-second timeout and an application-identifying `NOMINATIM_USER_AGENT`.
+
+The default user agent is `AmbulenceBooking/1.0 (Django emergency dispatch application)`. For a public deployment, set `NOMINATIM_USER_AGENT` in `.env` to include a maintained contact address or application URL. Respect the [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/); this free public service is capacity-limited and is not suitable for bulk or high-volume geocoding. If lookup fails or finds no result, operators can still set a manual map pin; no request can be saved or dispatched until coordinates are explicitly confirmed.
+
+The existing `bookings` table already stores coordinates in `patient_latitude` and `patient_longitude`. New migrations add the confirmation/idempotency metadata and geocoding cache/rate-limit tables without removing booking or patient records. Existing bookings keep their coordinate values, but are unconfirmed by default and cannot be dispatched until their location has been verified.
+
+For a manual end-to-end check, enter `PM Palem, Last Bus Stop, Visakhapatnam, Andhra Pradesh, India` in the call-taker portal, choose **Find location**, inspect and adjust the pin, check the confirmation box, and submit. Confirm the saved values in the MySQL `bookings` table and the active emergency marker/popup in the dispatcher dashboard. The driver assignment page receives the same confirmed point through its booking data and provides an OpenStreetMap navigation link.
 
 The local default channel layer is in-memory and works for a single development process. Configure `REDIS_URL` to use Redis with `channels_redis` in a multi-worker deployment.
 

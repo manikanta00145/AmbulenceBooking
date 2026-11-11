@@ -73,6 +73,9 @@ class DriverBookingStatusTests(TestCase):
             number_of_patients=1,
             emergency_type="Medical",
             location_address="1 Main Street",
+            latitude=12.0,
+            longitude=77.0,
+            location_confirmed=True,
             created_by=call_taker,
         )
         self.ambulance = Ambulance.objects.create(
@@ -124,11 +127,15 @@ class DriverBookingStatusTests(TestCase):
 
     def test_driver_pages_render_and_location_updates(self):
         self.client.force_login(self.driver)
-        self.assertEqual(self.client.get(reverse("drivers:dashboard")).status_code, 200)
-        self.assertEqual(
-            self.client.get(reverse("drivers:booking", args=[self.booking.pk])).status_code,
-            200,
+        dashboard_response = self.client.get(reverse("drivers:dashboard"))
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertContains(dashboard_response, "data-patient-latitude")
+        self.assertContains(dashboard_response, "Navigate to patient")
+        booking_response = self.client.get(
+            reverse("drivers:booking", args=[self.booking.pk])
         )
+        self.assertEqual(booking_response.status_code, 200)
+        self.assertContains(booking_response, "Open pickup map")
         response = self.client.post(
             reverse("drivers:location"),
             {"latitude": "13.25", "longitude": "78.5"},

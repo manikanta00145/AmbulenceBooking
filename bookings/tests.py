@@ -33,6 +33,7 @@ class AmbulanceAssignmentTests(TestCase):
             location_address="1 Main Street",
             latitude=12.0,
             longitude=77.0,
+            location_confirmed=True,
             created_by=self.call_taker,
         )
         self.ambulance = Ambulance.objects.create(
@@ -76,6 +77,16 @@ class AmbulanceAssignmentTests(TestCase):
     def test_stale_location_cannot_be_assigned(self):
         self.ambulance.location_updated_at = timezone.now() - timedelta(minutes=10)
         self.ambulance.save(update_fields=["location_updated_at"])
+        with self.assertRaises(ValidationError):
+            assign_ambulance(
+                booking_id=self.booking.pk,
+                ambulance_id=self.ambulance.pk,
+                dispatcher=self.dispatcher,
+            )
+
+    def test_unconfirmed_patient_location_cannot_be_assigned(self):
+        self.booking.location_confirmed = False
+        self.booking.save(update_fields=["location_confirmed"])
         with self.assertRaises(ValidationError):
             assign_ambulance(
                 booking_id=self.booking.pk,

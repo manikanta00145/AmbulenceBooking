@@ -16,6 +16,10 @@ REGISTRATION_OTP_DELIVERY_BACKEND = os.environ.get(
     "REGISTRATION_OTP_DELIVERY_BACKEND",
     "accounts.otp_delivery.console_otp_delivery" if DEBUG else "",
 )
+NOMINATIM_USER_AGENT = os.environ.get(
+    "NOMINATIM_USER_AGENT",
+    "AmbulenceBooking/1.0 (Django emergency dispatch application)",
+)
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")

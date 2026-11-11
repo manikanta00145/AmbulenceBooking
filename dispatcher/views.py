@@ -52,7 +52,11 @@ def dashboard(request):
 def booking_list(request):
     bookings = Booking.objects.filter(status=Booking.Status.PENDING).select_related("patient")
     for booking in bookings:
-        booking.nearest_ambulance = find_nearest_ambulance(booking.latitude, booking.longitude)
+        booking.nearest_ambulance = (
+            find_nearest_ambulance(booking.latitude, booking.longitude)
+            if booking.location_confirmed
+            else None
+        )
         booking.assignment_form = AssignmentForm()
     return render(request, "dispatcher/booking_list.html", {"bookings": bookings})
 
@@ -142,6 +146,7 @@ def live_locations(request):
         if (
             booking.status == Booking.Status.PENDING
             and ambulance is None
+            and booking.location_confirmed
             and booking.latitude is not None
             and booking.longitude is not None
         ):
@@ -154,10 +159,20 @@ def live_locations(request):
                 "id": str(booking.pk),
                 "patient": booking.patient.name,
                 "patient_phone": booking.patient.contact_number,
+                "emergency_type": booking.emergency_type,
                 "address": booking.location_address,
                 "number_of_patients": booking.number_of_patients,
-                "latitude": float(booking.latitude) if booking.latitude is not None else None,
-                "longitude": float(booking.longitude) if booking.longitude is not None else None,
+                "latitude": (
+                    float(booking.latitude)
+                    if booking.location_confirmed and booking.latitude is not None
+                    else None
+                ),
+                "longitude": (
+                    float(booking.longitude)
+                    if booking.location_confirmed and booking.longitude is not None
+                    else None
+                ),
+                "location_confirmed": booking.location_confirmed,
                 "requested_at": booking.requested_at.isoformat(),
                 "status": booking.status,
                 "ambulance_id": ambulance.pk if ambulance else None,

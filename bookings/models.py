@@ -37,6 +37,8 @@ class Booking(models.Model):
         blank=True,
         db_column="patient_longitude",
     )
+    location_confirmed = models.BooleanField(default=False)
+    submission_token = models.UUIDField(null=True, blank=True, unique=True, editable=False)
     requested_at = models.DateTimeField(
         default=timezone.now,
         db_index=True,

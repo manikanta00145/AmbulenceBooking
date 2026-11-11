@@ -75,6 +75,7 @@ class DispatcherPageTests(TestCase):
             location_address="Visakhapatnam test address",
             latitude=17.71,
             longitude=83.21,
+            location_confirmed=True,
             created_by=call_taker,
         )
         assigned_driver = User.objects.create_user(
@@ -99,6 +100,7 @@ class DispatcherPageTests(TestCase):
             location_address="Another Visakhapatnam test address",
             latitude=17.73,
             longitude=83.23,
+            location_confirmed=True,
             created_by=call_taker,
         )
         assign_ambulance(
@@ -126,6 +128,10 @@ class DispatcherPageTests(TestCase):
         case = next(item for item in data["emergencies"] if item["id"] == str(booking.pk))
         self.assertEqual(case["id"], str(booking.pk))
         self.assertEqual(case["patient"], "Live Case Patient")
+        self.assertEqual(case["emergency_type"], "Medical")
+        self.assertTrue(case["location_confirmed"])
+        self.assertEqual(case["latitude"], 17.71)
+        self.assertEqual(case["longitude"], 83.21)
         self.assertEqual(case["number_of_patients"], 2)
         self.assertEqual(case["status"], Booking.Status.PENDING)
         self.assertIsNone(case["ambulance_id"])
@@ -140,3 +146,32 @@ class DispatcherPageTests(TestCase):
         self.assertEqual(assigned_case["driver"], assigned_driver.driver_profile.driver_name)
         self.assertEqual(data["stats"]["total_ambulances"], 3)
         self.assertEqual(data["stats"]["active_emergencies"], 2)
+
+    def test_live_locations_hides_coordinates_that_have_not_been_confirmed(self):
+        call_taker = User.objects.create_user(username="unconfirmed-location-caller")
+        booking = Booking.objects.create(
+            patient=Patient.objects.create(
+                name="Unconfirmed Patient",
+                contact_number="555-0123",
+            ),
+            number_of_patients=1,
+            emergency_type="Medical",
+            location_address="Unverified address",
+            latitude=17.71,
+            longitude=83.21,
+            created_by=call_taker,
+        )
+        self.client.force_login(self.dispatcher)
+
+        response = self.client.get(reverse("dispatcher:locations"))
+
+        self.assertEqual(response.status_code, 200)
+        case = next(
+            item
+            for item in response.json()["emergencies"]
+            if item["id"] == str(booking.pk)
+        )
+        self.assertFalse(case["location_confirmed"])
+        self.assertIsNone(case["latitude"])
+        self.assertIsNone(case["longitude"])
+        self.assertIsNone(case["suggested_ambulance"])

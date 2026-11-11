@@ -4,7 +4,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const toast = document.getElementById("toast");
   const sidebar = document.getElementById("workspaceSidebar");
   const menuToggle = document.querySelector(".menu-toggle");
+  const addressInput = document.getElementById("id_location_address");
+  const geocodeButton = document.getElementById("geocodeAddress");
+  const geocodeStatus = document.getElementById("geocodeStatus");
+  const locationMapElement = document.getElementById("patient-location-map");
+  const latitudeInput = document.getElementById("id_latitude");
+  const longitudeInput = document.getElementById("id_longitude");
+  const locationConfirmed = document.getElementById("id_location_confirmed");
   let toastTimer;
+  let locationMap;
+  let patientMarker;
 
   const showToast = (message, isError = false) => {
     if (!toast || !message) return;
@@ -49,8 +58,120 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   });
 
+  const setPatientLocation = (latitude, longitude, message) => {
+    const lat = Number(latitude);
+    const lon = Number(longitude);
+    if (
+      !Number.isFinite(lat) || lat < -90 || lat > 90
+      || !Number.isFinite(lon) || lon < -180 || lon > 180
+    ) {
+      geocodeStatus.textContent = "Invalid coordinates. Select the location again.";
+      showToast(geocodeStatus.textContent, true);
+      return;
+    }
+
+    latitudeInput.value = lat.toFixed(7);
+    longitudeInput.value = lon.toFixed(7);
+    locationConfirmed.checked = false;
+    const point = [lat, lon];
+    if (!patientMarker) {
+      patientMarker = window.L.marker(point, { draggable: true }).addTo(locationMap);
+      patientMarker.on("dragend", () => {
+        const moved = patientMarker.getLatLng();
+        setPatientLocation(moved.lat, moved.lng, "Pin adjusted. Confirm the location before saving.");
+      });
+    } else {
+      patientMarker.setLatLng(point);
+    }
+    locationMap.setView(point, 16);
+    geocodeStatus.textContent = message;
+  };
+
+  const initializeLocationMap = () => {
+    if (locationMap) return true;
+    if (!window.L) {
+      geocodeStatus.textContent = "The map library did not load. Reload the page or contact support.";
+      return false;
+    }
+    locationMap = window.L.map(locationMapElement).setView([17.6868, 83.2185], 12);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(locationMap);
+    locationMap.on("click", (event) => {
+      setPatientLocation(
+        event.latlng.lat,
+        event.latlng.lng,
+        "Manual map pin selected. Confirm the location before saving.",
+      );
+    });
+    return true;
+  };
+
+  initializeLocationMap();
+
+  addressInput?.addEventListener("input", () => {
+    latitudeInput.value = "";
+    longitudeInput.value = "";
+    locationConfirmed.checked = false;
+    if (patientMarker) {
+      locationMap.removeLayer(patientMarker);
+      patientMarker = null;
+    }
+    geocodeStatus.textContent = "Address changed. Find it again or select a manual map pin.";
+  });
+
+  geocodeButton?.addEventListener("click", async () => {
+    const address = addressInput.value.trim();
+    if (!address) {
+      geocodeStatus.textContent = "Enter a patient address before searching.";
+      showToast(geocodeStatus.textContent, true);
+      addressInput.focus();
+      return;
+    }
+    if (!initializeLocationMap()) return;
+
+    geocodeButton.disabled = true;
+    geocodeStatus.textContent = "Looking up the address…";
+    try {
+      const csrfToken = form.querySelector('[name="csrfmiddlewaretoken"]').value;
+      const body = new URLSearchParams({ address });
+      const response = await fetch(form.dataset.geocodeUrl, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+          "X-CSRFToken": csrfToken,
+        },
+        body,
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || `Address lookup failed (${response.status}).`);
+      }
+      setPatientLocation(
+        result.latitude,
+        result.longitude,
+        `Address result: ${result.display_name}. Review the pin and confirm or adjust it.`,
+      );
+    } catch (error) {
+      geocodeStatus.textContent = `${error.message} You can still select a pin manually.`;
+      showToast(geocodeStatus.textContent, true);
+    } finally {
+      geocodeButton.disabled = false;
+    }
+  });
+
   if (form && submitButton) {
     form.addEventListener("submit", (event) => {
+      if (!latitudeInput.value || !longitudeInput.value || !locationConfirmed.checked) {
+        event.preventDefault();
+        geocodeStatus.textContent =
+          "Select a patient location and confirm it before saving the emergency.";
+        showToast(geocodeStatus.textContent, true);
+        locationConfirmed.focus();
+        return;
+      }
       if (!form.checkValidity()) {
         event.preventDefault();
         form.reportValidity();

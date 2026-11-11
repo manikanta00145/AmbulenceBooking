@@ -355,7 +355,7 @@ a { color: inherit; }
 }
 
 .request-panel {
-  height: 200px;
+  min-height: 200px;
   padding: 13px 18px 14px;
 }
 
@@ -400,6 +400,7 @@ a { color: inherit; }
 }
 
 .form-group { display: grid; min-width: 0; gap: 5px; }
+.address-group { grid-column: 1 / -1; }
 .form-group label { display: flex; align-items: center; gap: 5px; color: #e4efff; font-size: clamp(14px, 1.4vw, 16px); font-weight: 700; }
 .form-group label span { color: #29e9ea; }
 .field-wrap { position: relative; display: flex; min-width: 0; align-items: center; }
@@ -559,6 +560,16 @@ a { color: inherit; }
 .message-dismiss { margin-left: auto; border: 0; color: #9ed5bd; background: transparent; font-size: 16px; cursor: pointer; }
 .message.error, .message.warning { border-color: rgba(248, 116, 144, .36); color: #ffd1d9; background: rgba(122, 34, 57, .3); }
 .form-errors { margin: 8px 0; color: #ffabb7; font-size: 9px; }
+
+.location-lookup { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+.location-lookup-button { min-height: 34px; padding: 6px 12px; border: 1px solid rgba(30, 218, 238, .48); border-radius: 7px; color: #e1fcff; background: rgba(4, 72, 122, .65); font-weight: 700; cursor: pointer; }
+.location-lookup-button:disabled { cursor: wait; opacity: .65; }
+#geocodeStatus, .location-map-help { color: #a9c5e5; font-size: 9px; line-height: 1.5; }
+.patient-location-map { width: 100%; height: 280px; margin-top: 9px; border: 1px solid rgba(68, 173, 255, .35); border-radius: 9px; background: #dce8ee; }
+.location-map-help { margin: 5px 0 0; }
+.location-confirmation { display: flex; align-items: flex-start; gap: 8px; margin-top: 9px; color: #e1edff; font-size: 10px; }
+.location-confirmation input { margin-top: 2px; accent-color: #16dbe7; }
+.location-confirmation .field-error { flex-basis: 100%; }
 
 .toast { position: fixed; z-index: 50; right: 20px; bottom: 20px; max-width: min(420px, calc(100vw - 32px)); padding: 11px 15px; border: 1px solid rgba(30, 218, 238, .48); border-radius: 9px; color: #e1fcff; background: rgba(4, 40, 74, .97); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); font-size: 10px; opacity: 0; pointer-events: none; transform: translateY(9px); transition: opacity .2s ease, transform .2s ease; }
 .toast.show { opacity: 1; transform: translateY(0); }

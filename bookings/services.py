@@ -18,6 +18,14 @@ def assign_ambulance(*, booking_id, ambulance_id, dispatcher):
     if booking.status != Booking.Status.PENDING or booking.assigned_ambulance_id:
         raise ValidationError("This booking has already been assigned or is no longer pending.")
     if (
+        booking.latitude is None
+        or booking.longitude is None
+        or not booking.location_confirmed
+    ):
+        raise ValidationError(
+            "The patient location must be confirmed before dispatch."
+        )
+    if (
         ambulance.availability_status != Ambulance.Availability.AVAILABLE
         or ambulance.patient_status != Ambulance.PatientStatus.OFF
     ):

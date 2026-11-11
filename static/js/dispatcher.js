@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const updatePatientMarker = (booking) => {
     let marker = patientMarkers.get(booking.id);
-    if (!hasCoordinates(booking.latitude, booking.longitude)) {
+    if (!booking.location_confirmed || !hasCoordinates(booking.latitude, booking.longitude)) {
       if (marker) {
         map.removeLayer(marker);
         patientMarkers.delete(booking.id);
@@ -142,12 +142,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     marker.setIcon(patientIcon(booking.id === selectedBookingId));
     marker.bindPopup(popupDetails(booking.patient, [
-      ["Case", booking.id],
-      ["Contact", booking.patient_phone],
+      ["Case ID", booking.id],
+      ["Emergency Type", booking.emergency_type],
       ["Address", booking.address],
-      ["Patients", booking.number_of_patients],
-      ["Status", booking.status],
-      ["Assigned ambulance", booking.ambulance || "Unassigned"],
+      ["Contact Number", booking.patient_phone],
     ]));
     marker.off("click");
     marker.on("click", () => selectEmergency(booking.id, true));
@@ -225,8 +223,14 @@ document.addEventListener("DOMContentLoaded", () => {
     detailList.className = "detail-grid";
     appendDetail(detailList, "Case ID", booking.id);
     appendDetail(detailList, "Patient", booking.patient);
+    appendDetail(detailList, "Emergency Type", booking.emergency_type);
     appendDetail(detailList, "Contact", booking.patient_phone);
     appendDetail(detailList, "Address", booking.address);
+    appendDetail(
+      detailList,
+      "Patient location",
+      booking.location_confirmed ? "Confirmed" : "Unconfirmed; dispatch is blocked",
+    );
     appendDetail(detailList, "Patients", String(booking.number_of_patients));
     appendDetail(detailList, "Requested", formatDate(booking.requested_at));
     appendDetail(detailList, "Status", booking.status);
@@ -336,15 +340,14 @@ document.addEventListener("DOMContentLoaded", () => {
     emergencies.forEach(updatePatientMarker);
     const booking = emergencies.find((item) => item.id === bookingId);
     if (focusMap && booking) {
-      const points = [];
-      if (hasCoordinates(booking.latitude, booking.longitude)) {
-        points.push([Number(booking.latitude), Number(booking.longitude)]);
+      if (booking.location_confirmed && hasCoordinates(booking.latitude, booking.longitude)) {
+        map.setView([Number(booking.latitude), Number(booking.longitude)], 15);
+      } else if (hasCoordinates(booking.ambulance_latitude, booking.ambulance_longitude)) {
+        map.setView(
+          [Number(booking.ambulance_latitude), Number(booking.ambulance_longitude)],
+          14,
+        );
       }
-      if (hasCoordinates(booking.ambulance_latitude, booking.ambulance_longitude)) {
-        points.push([Number(booking.ambulance_latitude), Number(booking.ambulance_longitude)]);
-      }
-      if (points.length > 1) map.fitBounds(points, { padding: [40, 40], maxZoom: 14 });
-      else if (points.length) map.setView(points[0], 14);
     }
     routeForSelection(true);
   }

@@ -9,7 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="{% static 'css/call-taker-dashboard.css' %}">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
   <script src="{% static 'js/call-taker-dashboard.js' %}" defer></script>
 </head>
 <body>
@@ -160,8 +162,9 @@
             <span class="secure-tag"><span></span> Secure intake</span>
           </div>
 
-          <form method="post" action="{% url 'patients:create' %}" id="emergencyForm" novalidate>
+          <form method="post" action="{% url 'patients:create' %}" id="emergencyForm" data-geocode-url="{% url 'patients:geocode' %}" novalidate>
             {% csrf_token %}
+            {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
             <div class="form-grid">
               <div class="form-group">
                 <label for="{{ form.name.id_for_label }}">Patient Name <span>*</span></label>
@@ -195,6 +198,19 @@
                   {{ form.location_address }}
                 </div>
                 {% if form.location_address.errors %}<div class="field-error" role="alert">{{ form.location_address.errors }}</div>{% endif %}
+                <div class="location-lookup">
+                  <button type="button" class="location-lookup-button" id="geocodeAddress">Find location</button>
+                  <span id="geocodeStatus" role="status" aria-live="polite">Search the address, then review and confirm the pin.</span>
+                </div>
+                <div id="patient-location-map" class="patient-location-map" aria-label="Patient location confirmation map"></div>
+                <p class="location-map-help">The address result is an estimate. Drag or click the pin to correct it before confirming.</p>
+                {% if form.latitude.errors %}<div class="field-error" role="alert">{{ form.latitude.errors }}</div>{% endif %}
+                {% if form.longitude.errors %}<div class="field-error" role="alert">{{ form.longitude.errors }}</div>{% endif %}
+                <div class="location-confirmation">
+                  {{ form.location_confirmed }}
+                  <label for="{{ form.location_confirmed.id_for_label }}">{{ form.location_confirmed.label }}</label>
+                  {% if form.location_confirmed.errors %}<div class="field-error" role="alert">{{ form.location_confirmed.errors }}</div>{% endif %}
+                </div>
               </div>
             </div>
             <div class="form-footer">

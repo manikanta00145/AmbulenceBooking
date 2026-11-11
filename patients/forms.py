@@ -1,3 +1,5 @@
+import uuid
+
 from django import forms
 
 from patients.models import Patient
@@ -29,6 +31,10 @@ class EmergencyRequestForm(forms.Form):
         decimal_places=7,
         max_digits=10,
     )
+    location_confirmed = forms.BooleanField(
+        required=False,
+        label="I verified this patient location",
+    )
 
     def clean(self):
         cleaned_data = super().clean()
@@ -46,6 +52,17 @@ class EmergencyRequestForm(forms.Form):
         longitude = cleaned_data.get("longitude")
         if (latitude is None) != (longitude is None):
             self.add_error("latitude", "Provide both coordinates or leave both blank.")
+        if latitude is not None and longitude is not None:
+            if not cleaned_data.get("location_confirmed"):
+                self.add_error(
+                    "location_confirmed",
+                    "Verify the patient location before saving this emergency.",
+                )
+        elif cleaned_data.get("location_confirmed"):
+            self.add_error(
+                "location_confirmed",
+                "Select a patient location before confirming it.",
+            )
         return cleaned_data
 
     def save_patient(self):
@@ -77,6 +94,32 @@ class CallTakerEmergencyRequestForm(forms.Form):
         label="Pickup Address",
         error_messages={"required": "Enter the pickup address."},
     )
+    latitude = forms.DecimalField(
+        min_value=-90,
+        max_value=90,
+        required=False,
+        decimal_places=7,
+        max_digits=10,
+        widget=forms.HiddenInput(),
+    )
+    longitude = forms.DecimalField(
+        min_value=-180,
+        max_value=180,
+        required=False,
+        decimal_places=7,
+        max_digits=10,
+        widget=forms.HiddenInput(),
+    )
+    location_confirmed = forms.BooleanField(
+        required=True,
+        label="I verified this patient location on the map",
+        error_messages={"required": "Verify the patient location on the map before saving."},
+    )
+    submission_token = forms.UUIDField(
+        required=True,
+        initial=uuid.uuid4,
+        widget=forms.HiddenInput(),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -95,6 +138,17 @@ class CallTakerEmergencyRequestForm(forms.Form):
                 "autocomplete": "street-address",
             }
         )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        latitude = cleaned_data.get("latitude")
+        longitude = cleaned_data.get("longitude")
+        if latitude is None or longitude is None:
+            self.add_error(
+                "location_address",
+                "Find the address or select a location on the map before saving.",
+            )
+        return cleaned_data
 
     def save_patient(self):
         return Patient.objects.create(

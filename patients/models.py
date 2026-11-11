@@ -19,3 +19,17 @@ class Patient(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class GeocodingCache(models.Model):
+    address_key = models.CharField(max_length=64, unique=True)
+    address = models.CharField(max_length=250)
+    latitude = models.DecimalField(max_digits=10, decimal_places=7)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7)
+    display_name = models.CharField(max_length=500)
+    expires_at = models.DateTimeField(db_index=True)
+
+
+class NominatimRequestState(models.Model):
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    last_request_at = models.DateTimeField(null=True, blank=True)

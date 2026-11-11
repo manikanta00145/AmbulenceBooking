@@ -22,7 +22,7 @@
   <article class="card">
     <h2>Pickup information</h2>
     <dl><dt>Emergency</dt><dd>{{ booking.emergency_type }}</dd><dt>Address</dt><dd>{{ booking.location_address }}</dd></dl>
-    {% if booking.latitude is not None and booking.longitude is not None %}
+    {% if booking.location_confirmed and booking.latitude is not None and booking.longitude is not None %}
       <a class="button button-secondary" href="https://www.openstreetmap.org/?mlat={{ booking.latitude }}&amp;mlon={{ booking.longitude }}#map=16/{{ booking.latitude }}/{{ booking.longitude }}" target="_blank" rel="noopener noreferrer">Open pickup map</a>
     {% endif %}
   </article>
