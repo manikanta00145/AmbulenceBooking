@@ -1,0 +1,11 @@
+<dl class="driver-gps-status">
+  <div><dt>GPS permission</dt><dd data-gps-value="permission">Not requested</dd></div>
+  <div><dt>Device GPS</dt><dd data-gps-value="device">Unavailable</dd></div>
+  <div><dt>GPS accuracy</dt><dd data-gps-value="accuracy">{% if gps_accuracy_meters is not None %}{{ gps_accuracy_meters|floatformat:0 }} m{% else %}Unavailable{% endif %}</dd></div>
+  <div><dt>Network</dt><dd data-gps-value="network">Online</dd></div>
+  <div><dt>Server sync</dt><dd data-gps-value="sync">Idle</dd></div>
+  <div><dt>Last location update</dt><dd data-gps-value="last-update">{% if gps_last_updated_at %}{{ gps_last_updated_at|date:"M j, Y, g:i:s a" }}{% elif last_location_update %}{{ last_location_update|date:"M j, Y, g:i:s a" }}{% else %}No update{% endif %}</dd></div>
+  <div><dt>GPS freshness</dt><dd data-gps-value="freshness">No current fix</dd></div>
+  <div><dt>Tracking</dt><dd data-gps-value="tracking">Stopped</dd></div>
+  <div><dt>Navigation</dt><dd data-gps-value="navigation">{% if booking.status == "En Route" %}Active{% elif booking.status == "Arrived" %}Arrived{% else %}Not started{% endif %}</dd></div>
+</dl>

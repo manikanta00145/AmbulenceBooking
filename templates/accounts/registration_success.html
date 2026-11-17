@@ -42,7 +42,13 @@
           {% endfor %}
         </div>
       {% endif %}
-      <p class="success-description">Your account is pending administrator approval. You can sign in once it has been approved.</p>
+      <p class="success-description">
+        {% if approval_required %}
+          Your account is pending administrator approval. You can sign in once it has been approved.
+        {% else %}
+          Your account is ready. You can sign in now.
+        {% endif %}
+      </p>
       <p class="redirect-note">Taking you to the {{ portal_title|lower }} login page…</p>
       <a class="success-login-link" href="{{ redirect_url }}">Continue to login now</a>
     </section>

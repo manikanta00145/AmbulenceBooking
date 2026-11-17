@@ -19,4 +19,5 @@ class AssignmentForm(forms.Form):
             latitude__isnull=False,
             longitude__isnull=False,
             location_updated_at__gte=timezone.now() - GPS_MAX_AGE,
+            location_updated_at__lte=timezone.now(),
         ).select_related("driver")

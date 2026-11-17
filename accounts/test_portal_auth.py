@@ -51,10 +51,11 @@ PORTALS = (
         "success_message": "Driver account created successfully! Please wait for administrator approval.",
         "dashboard": "drivers:dashboard",
         "fields": {
+            "address": "1 Demo Road",
             "ambulance_number": "AP 31 AB 1234",
             "driving_licence_number": "DL-12345-2024",
         },
-        "labels": ("Ambulance Number", "Driving Licence Number"),
+        "labels": ("Address", "Ambulance Number", "Driving Licence Number"),
         "other_fields": ("Dispatch Centre", "Call-Taker Office/Station"),
     },
 )
@@ -64,6 +65,7 @@ class PortalTestMixin:
     def registration_data(self, portal, index=0, **overrides):
         data = {
             "full_name": "Jordan Example",
+            "email": f"employee-{index}@example.invalid",
             "employee_id": f"EMP-{index + 100}",
             "username": f"employee-{index}",
             "phone_number": f"+1 555 123 {index:04d}",
@@ -135,6 +137,7 @@ class PortalPageTests(PortalTestMixin, TestCase):
                 )
                 for label in (
                     "Full Name",
+                    "Email",
                     "Employee ID",
                     "Username",
                     "Phone Number",

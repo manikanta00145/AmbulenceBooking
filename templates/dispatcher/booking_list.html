@@ -10,7 +10,9 @@
         <tr>
           <td><a href="{% url 'bookings:detail' booking.pk %}">{{ booking.pk }}</a><br><small>{{ booking.requested_at|date:"M j, H:i" }}</small></td>
           <td>{{ booking.patient.name }}<br><small>{{ booking.patient.contact_number }}</small></td>
-          <td>{{ booking.emergency_type }}<br><small>{{ booking.location_address }}</small></td>
+          <td>{{ booking.emergency_type }}<br><small>{{ booking.location_address }}</small>
+            {% if booking.destination_hospital %}<br><small>Destination: {{ booking.destination_hospital }}</small>{% endif %}
+          </td>
           <td>
             {% if booking.nearest_ambulance %}
               <strong>{{ booking.nearest_ambulance.vehicle_number }}</strong><br>

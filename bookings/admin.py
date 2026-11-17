@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from bookings.models import AmbulanceAssignment, Booking, BookingStatusHistory
+from bookings.models import AmbulanceAssignment, Booking, BookingStatusHistory, Payment
 
 
 class BookingStatusHistoryInline(admin.TabularInline):
@@ -12,7 +12,14 @@ class BookingStatusHistoryInline(admin.TabularInline):
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ("booking_id", "patient", "status", "assigned_ambulance", "requested_at")
+    list_display = (
+        "booking_id",
+        "patient",
+        "status",
+        "assigned_ambulance",
+        "destination_hospital",
+        "requested_at",
+    )
     list_filter = ("status", "requested_at")
     search_fields = ("booking_id", "patient__name", "patient__contact_number")
     readonly_fields = ("booking_id", "requested_at")
@@ -31,3 +38,11 @@ class AmbulanceAssignmentAdmin(admin.ModelAdmin):
     )
     list_filter = ("assignment_status",)
     readonly_fields = ("assigned_at",)
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ("booking", "amount", "status", "method", "created_at", "paid_at")
+    list_filter = ("status", "method", "created_at")
+    search_fields = ("booking__booking_id", "transaction_reference")
+    readonly_fields = ("created_at", "updated_at")

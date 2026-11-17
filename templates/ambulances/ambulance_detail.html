@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Ambulance {{ ambulance.vehicle_number }} · Ambulance Dispatch{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Fleet details</p>
+  <h1>Ambulance {{ ambulance.vehicle_number }}</h1>
+  <p><a href="{% url 'dispatcher:ambulances' %}">&larr; Back to fleet list</a></p>
+</section>
+<section class="card">
+  <h2>Vehicle information</h2>
+  <dl>
+    <dt>Registration number</dt><dd>{{ ambulance.vehicle_number }}</dd>
+    <dt>Type</dt><dd>{{ ambulance.vehicle_type|default:"Not specified" }}</dd>
+    <dt>Model</dt><dd>{{ ambulance.vehicle_model|default:"Not specified" }}</dd>
+    <dt>Assigned driver</dt><dd>{{ ambulance.driver.driver_name }} ({{ ambulance.driver.phone_number }})</dd>
+    <dt>Assigned hospital</dt><dd>{{ ambulance.hospital|default:"Not assigned" }}</dd>
+    <dt>Availability status</dt><dd><span class="status">{{ ambulance.get_availability_status_display }}</span></dd>
+    <dt>Patient status</dt><dd>{{ ambulance.get_patient_status_display }}</dd>
+    <dt>Current coordinates</dt><dd>{% if ambulance.latitude is not None %}{{ ambulance.latitude }}, {{ ambulance.longitude }}{% else %}No GPS fix{% endif %}</dd>
+    <dt>Last location update</dt><dd>{{ ambulance.location_updated_at|date:"M j, Y H:i:s" }}</dd>
+  </dl>
+  <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
+    <a href="{% url 'ambulances:edit' ambulance.pk %}" class="button">Edit Ambulance</a>
+    <a href="{% url 'ambulances:delete' ambulance.pk %}" class="button danger" style="background:#dc2626;color:white;text-decoration:none;">Delete Ambulance</a>
+  </div>
+</section>
+{% endblock %}

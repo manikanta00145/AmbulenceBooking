@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Hospitals · Ambulance Dispatch{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Directory</p>
+  <h1>Hospitals</h1>
+</section>
+<section class="card">
+  {% if hospitals %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Hospital</th><th>Address</th><th>Contact</th><th>Facilities</th><th>Assigned ambulances</th></tr></thead>
+      <tbody>{% for hospital in hospitals %}
+        <tr>
+          <td>{{ hospital.name }}</td>
+          <td>{{ hospital.address }}</td>
+          <td>{{ hospital.contact_number }}{% if hospital.email %}<br>{{ hospital.email }}{% endif %}</td>
+          <td>{{ hospital.facilities|default:"Not listed" }}</td>
+          <td>{{ hospital.ambulances.count }}</td>
+        </tr>
+      {% endfor %}</tbody>
+    </table></div>
+  {% else %}
+    <p class="empty-state">No hospitals are currently listed. An administrator can add hospitals in Django Admin.</p>
+  {% endif %}
+</section>
+{% endblock %}

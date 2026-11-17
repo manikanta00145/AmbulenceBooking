@@ -1,10 +1,21 @@
+from django.conf import settings
 from django.db import models
 
 
 class Patient(models.Model):
     id = models.BigAutoField(primary_key=True, db_column="patient_id")
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="patient_profile",
+    )
     name = models.CharField(max_length=120, db_column="patient_name")
     contact_number = models.CharField(max_length=30)
+    email = models.EmailField(blank=True)
+    address = models.CharField(max_length=250, blank=True)
+    emergency_contact = models.CharField(max_length=30, blank=True)
     relationship = models.CharField(
         max_length=60,
         blank=True,

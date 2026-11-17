@@ -13,6 +13,7 @@ class User(AbstractUser):
         CALL_TAKER = "CALL_TAKER", "Call taker"
         DISPATCHER = "DISPATCHER", "Dispatcher"
         DRIVER = "DRIVER", "Ambulance driver"
+        PATIENT = "PATIENT", "Patient"
 
     class ApprovalStatus(models.TextChoices):
         PENDING = "PENDING", "Pending"

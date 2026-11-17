@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Patient dashboard · Ambulance Dispatch{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Patient portal</p>
+  <h1>Welcome, {{ patient.name }}</h1>
+  <p><a href="{% url 'patients:profile' %}">Update your patient profile</a></p>
+</section>
+<section class="form-card">
+  <h2>Request emergency assistance</h2>
+  <p class="muted">Confirm the pickup point on the map before submitting. Hospital destination is optional.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% for field in form %}
+      <div class="field">
+        {{ field.label_tag }}
+        {{ field }}
+        {{ field.errors }}
+      </div>
+    {% endfor %}
+    <button class="button" type="submit">Submit emergency request</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Your booking history</h2>
+  {% if bookings %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Booking</th><th>Requested</th><th>Emergency</th><th>Destination</th><th>Status</th></tr></thead>
+      <tbody>{% for booking in bookings %}
+        <tr>
+          <td><a href="{% url 'bookings:detail' booking.pk %}">{{ booking.pk }}</a></td>
+          <td>{{ booking.requested_at|date:"M j, Y H:i" }}</td>
+          <td>{{ booking.emergency_type }}<br><small>{{ booking.location_address }}</small></td>
+          <td>{{ booking.destination_hospital|default:"Not selected" }}</td>
+          <td><span class="status">{{ booking.get_status_display }}</span></td>
+        </tr>
+      {% endfor %}</tbody>
+    </table></div>
+  {% else %}
+    <p class="empty-state">You have not submitted an emergency request.</p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'js/booking.js' %}" defer></script>{% endblock %}

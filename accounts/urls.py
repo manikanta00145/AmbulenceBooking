@@ -8,7 +8,10 @@ from accounts.views import (
     CallTakerLoginView,
     DispatcherRegistrationView,
     DispatcherLoginView,
+    PatientLoginView,
+    PatientRegistrationView,
     dashboard,
+    logout_view,
 )
 from accounts.otp_views import CallTakerRegistrationOtpView, DispatcherRegistrationOtpView
 from accounts.approval_views import (
@@ -35,6 +38,7 @@ urlpatterns = [
     path("login/", AccountLoginView.as_view(), name="login"),
     path("call-taker/login/", CallTakerLoginView.as_view(), name="call_taker_login"),
     path("dispatcher/login/", DispatcherLoginView.as_view(), name="dispatcher_login"),
+    path("patient/login/", PatientLoginView.as_view(), name="patient_login"),
     path(
         "call-taker/register/send-otp/",
         CallTakerRegistrationOtpView.as_view(),
@@ -59,7 +63,7 @@ urlpatterns = [
         {"action": "verify"},
         name="dispatcher_verify_otp",
     ),
-    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("logout/", logout_view, name="logout"),
     path(
         "register/",
         CallTakerRegistrationView.as_view(),
@@ -74,6 +78,11 @@ urlpatterns = [
         "dispatcher/register/",
         DispatcherRegistrationView.as_view(),
         name="dispatcher_register",
+    ),
+    path(
+        "patient/register/",
+        PatientRegistrationView.as_view(),
+        name="patient_register",
     ),
     path("dashboard/", dashboard, name="dashboard"),
 ]

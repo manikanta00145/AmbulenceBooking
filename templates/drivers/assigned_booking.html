@@ -25,6 +25,9 @@
     {% if booking.location_confirmed and booking.latitude is not None and booking.longitude is not None %}
       <a class="button button-secondary" href="https://www.openstreetmap.org/?mlat={{ booking.latitude }}&amp;mlon={{ booking.longitude }}#map=16/{{ booking.latitude }}/{{ booking.longitude }}" target="_blank" rel="noopener noreferrer">Open pickup map</a>
     {% endif %}
+    {% if navigation_available %}
+      <a class="button" href="{% url 'drivers:navigation' booking.pk %}">Open live navigation</a>
+    {% endif %}
   </article>
 </section>
 <section class="card">

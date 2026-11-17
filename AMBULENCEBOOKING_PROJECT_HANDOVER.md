@@ -1,6 +1,6 @@
 # AmbulenceBooking Project Handover
 
-> **Purpose of this document:** a source-grounded transfer guide for the next developer or GitHub Copilot account. It describes the repository as inspected on 2026-11-11. Treat the checked-in source and migrations as authoritative when this document and runtime configuration differ.
+> **Purpose of this document:** a source-grounded transfer guide for the next developer or GitHub Copilot account. This document was updated after the live GPS implementation; treat checked-in source and actual migration state as authoritative when this document and runtime configuration differ.
 >
 > **Operational warning:** this is an academic/demo application, not a validated emergency dispatch service. Do not rely on it for real emergency response without substantial safety, availability, privacy, security, and operational work.
 
@@ -18,12 +18,12 @@ The repository describes a workflow inspired by India's 108 ambulance service. I
 2. An approved call taker records a patient and emergency request. The call-taker request currently uses the generic emergency type `"Emergency"`.
 3. Before saving, the call taker looks up the address through Nominatim or places a pin manually, reviews/adjusts the Leaflet pin, and explicitly confirms the coordinates.
 4. A dispatcher sees active emergencies and ambulance locations. Pending bookings can be assigned to an available ambulance with a recent GPS location. The suggestion is based on straight-line distance, not traffic.
-5. The assigned driver sees the booking in their dashboard, shares vehicle GPS while the page is open, and advances the booking through the allowed status sequence.
+5. The assigned driver accepts the booking, opens live navigation for the active assignment, and explicitly starts GPS sharing. The driver map uses the confirmed patient point and a fresh ambulance GPS fix, displays a road route/estimate when available, and exposes journey status history.
 6. Completing or cancelling a booking releases the active assignment and returns the ambulance to available/no-patient state.
 
 ### Not implemented as a complete field-operations workflow
 
-Hospital discovery and selection, government-hospital filtering, hospital navigation, a driver reject action, traffic-aware ambulance ranking, and a native/mobile driver application are not verified in the source. See [Current Development Status](#10-current-development-status).
+Live driver-side GPS tracking, OSRM road routing, and server-validated arrival are implemented in source. Real-device/browser behavior and external routing availability still require field-style testing. Hospital discovery/selection, government-hospital filtering, hospital navigation, a driver reject action, traffic-aware ambulance ranking, and a native/mobile driver application are not implemented. See [Current Development Status](#10-current-development-status).
 
 ## 2. TECHNOLOGY STACK
 
@@ -33,7 +33,7 @@ Hospital discovery and selection, government-hospital filtering, hospital naviga
 |---|---|
 | Python | Project documentation says Python 3.10+; the inspected local interpreter is Python 3.15.0. Docker image uses Python 3.12. |
 | Django | Requirement `Django>=5.2,<6.0`; installed local version 5.2.19. |
-| Database | Django supports SQLite and MySQL. The active local runtime selected MySQL; the Docker guide and example environment are SQLite-based. MySQL server version is **UNKNOWN**. |
+| Database | MySQL 8.4 is the Docker target and the only supported Django backend. The SQLite source and external backup were deleted before import; no data migration was performed. |
 | MySQL driver | `mysqlclient>=2.2.7,<3.0`; installed local version 2.3.0. |
 | Django Channels | `channels[daphne]>=4.2,<5.0`; installed `channels==4.3.2`. |
 | Redis channel layer | `channels-redis>=4.2,<5.0`; installed `channels-redis==4.3.0`. Optional; in-memory channel layer is the default when `REDIS_URL` is unset. |
@@ -41,7 +41,7 @@ Hospital discovery and selection, government-hospital filtering, hospital naviga
 | Environment loading | `python-dotenv>=1.0,<2.0`; installed local version 1.2.4. |
 | Frontend | Django templates, HTML, CSS, and vanilla JavaScript. No frontend build system or package manifest was found. |
 | Maps | Leaflet 1.9.4, loaded from unpkg CDN on call-taker and dispatcher map pages. |
-| Map tiles | OpenStreetMap raster tile service (`tile.openstreetmap.org`), with attribution in the map UI. |
+| Map tiles | Esri World Street Map raster tiles with the service's source attribution in the map UI; no API key is required. |
 | Geocoding | OpenStreetMap Nominatim `/search`, invoked server-side; no API key or paid service configured. |
 | Route display | Dispatcher browser calls the public OSRM route service (`router.project-osrm.org`) for a selected assigned case. |
 
@@ -144,7 +144,8 @@ AmbulenceBooking/
 - **`accounts`** — custom `User`, roles, portal login/registration, OTP verification, and administrator approval/audit.
 - **`patients`** — patient records, call-taker emergency form, Nominatim geocoding service and cache.
 - **`bookings`** — emergency booking, status history, ambulance assignment records, detail page, and transactional assignment/status services.
-- **`ambulances`** — ambulance fleet and GPS sample models, fleet forms, distance calculation, eligibility, and location update/broadcast.
+- **`ambulances`** — ambulance fleet and GPS sample models, fleet forms, distance calculation, eligibility, validated/rate-limited location updates, and broadcast.
+- **GPS interval/movement/heartbeat and arrival radius/accuracy settings** are configured through the environment and validated at startup.
 - **`drivers`** — driver profile, dashboard, vehicle GPS/availability endpoints, and constrained booking status workflow.
 - **`dispatcher`** — dispatcher pages, assignment UI, live location JSON endpoint, and authenticated Channels WebSocket consumer.
 
@@ -157,13 +158,15 @@ AmbulenceBooking/
 
 ### Migration files present
 
-- `accounts`: `0001_initial` through `0007_user_approval_status_and_audit`
-- `ambulances`: `0001_initial`, `0002_alter_ambulance_driver_alter_ambulance_id_and_more`
-- `bookings`: `0001_initial`, `0002_remove_ambulanceassignment_bookings_one_active_assignment_and_more`, `0003_booking_location_confirmed_booking_submission_token`
-- `drivers`: `0001_initial`
-- `patients`: `0001_initial`, `0002_remove_patient_patients_at_least_one_patient_and_more`, `0003_remove_number_of_patients`, `0004_geocodingcache_nominatimrequeststate`
+- `accounts`: `0001_initial` through `0008_alter_user_role`
+- `ambulances`: `0001_initial` through `0004_ambulance_location_accuracy_meters_and_more`
+- `bookings`: `0001_initial` through `0004_booking_destination_hospital_payment`
+- `drivers`: `0001_initial`, `0002_driver_address`
+- `hospitals`: `0001_initial`
+- `notifications`: `0001_initial`
+- `patients`: `0001_initial` through `0005_patient_address_patient_email_and_more`
 
-The `bookings.0003` and `patients.0004` migrations were **pending** in the inspected active database. Apply migrations before expecting their new fields/tables at runtime.
+The earlier inspection found `bookings.0003` and `patients.0004` pending. On 2026-11-17, `ambulances.0004` was applied to the configured local MySQL database after a call-taker submission exposed its missing GPS accuracy column. Current `showmigrations` output confirms `ambulances.0004`, `bookings.0003`, `patients.0004`, and `patients.0005` are applied. Verify migration state separately in every other environment.
 
 ## 4. SYSTEM ARCHITECTURE
 
@@ -188,8 +191,9 @@ Call taker browser
              │        └─ authenticated dispatcher WebSocket /ws/locations/
              │
              └── Driver HTML dashboard queries active assignments
-                      ├─ POST /drivers/location/ → ambulance + gps_locations
-                      └─ POST booking status form → bookings/status history
+                      ├─ explicit browser GPS watch → POST /drivers/location/
+                      │     └─ ambulance + gps_locations + Channels broadcast
+                      └─ journey status form → bookings/status history
 ```
 
 All three portals share Django authentication and database models. The driver receives assignments by reading bookings joined to its ambulance; there is no separate mobile-app service or driver-specific JSON task-feed API.
@@ -252,12 +256,12 @@ Django default table name; no explicit `db_table`.
 
 - Primary key: `id` (`BigAutoField`, column `ambulance_id`).
 - Unique `vehicle_number`; `driver` OneToOne FK to `Driver` (`PROTECT`).
-- Nullable `latitude` and `longitude` decimal fields with world-range validators; `location_updated_at` (column `last_location_update`); `patient_status` (`ON`/`OFF`); indexed `availability_status` (`Available`/`Unavailable`).
+- Nullable `latitude` and `longitude` decimal fields with world-range validators; nullable `location_accuracy_meters`; `location_updated_at` (column `last_location_update`); `patient_status` (`ON`/`OFF`); indexed `availability_status` (`Available`/`Unavailable`).
 
 #### `gps_locations` — `ambulances.GPSLocation`
 
 - Primary key: `id` (`BigAutoField`, column `location_id`).
-- `ambulance` FK (`CASCADE`); required latitude/longitude decimal values with world-range validation; indexed `recorded_at`.
+- `ambulance` FK (`CASCADE`); required latitude/longitude decimal values with world-range validation; nullable `accuracy_meters`; indexed `recorded_at`.
 - Historical location samples are retained by the model; no cleanup/retention job was found.
 
 #### `patients_geocodingcache` — `patients.GeocodingCache`
@@ -292,7 +296,7 @@ The inspected active MySQL schema also contains framework tables `auth_group`, `
 
 ### Active database versus code schema
 
-The current local runtime selected the MySQL backend. Its inspected table list includes the custom tables above except `patients_geocodingcache` and `patients_nominatimrequeststate`; `bookings.0003` is also pending, so live `bookings` does not yet have the code-defined `location_confirmed` and `submission_token` columns. The listed pending state comes from `manage.py showmigrations`; do not assume production or another developer database has the same state.
+The earlier inspection found `bookings.0003` and `patients.0004` pending on the then-configured local MySQL database. After a call-taker POST failed because `ambulances.location_accuracy_meters` was absent, `ambulances.0004` was applied to local `ambulance_db` on 2026-11-17. It adds two nullable accuracy columns and does not rewrite existing rows. Current `showmigrations` confirms the listed migrations are applied locally; check the confirmed target and back it up before applying migrations in any other environment.
 
 No patient/booking data rows, connection values, credentials, or `.env` contents are included here.
 
@@ -301,10 +305,10 @@ No patient/booking data rows, connection values, credentials, or `.env` contents
 ### Models and services
 
 - Models and relationships are described in [Database Documentation](#5-database-documentation).
-- `ambulances.services` validates and saves driver GPS updates, writes a GPSLocation row, broadcasts updates on transaction commit, calculates Haversine distance, and filters eligible ambulances by availability, patient state, active driver, coordinates, and a five-minute GPS freshness limit.
+- `ambulances.services` validates coordinate ranges, accuracy, and the browser fix timestamp; verifies the driver's own ambulance and optional active booking assignment; applies configurable time/movement/heartbeat throttles; saves latest coordinates and `GPSLocation` accuracy history; and broadcasts authorized dispatcher updates on transaction commit. It also calculates Haversine distance and filters eligible ambulances by availability, patient state, active driver, coordinates, and five-minute GPS freshness.
 - `bookings.services.assign_ambulance` uses an atomic transaction and row locks, checks dispatcher role, booking state, confirmed patient coordinates, ambulance availability/GPS/driver eligibility, then changes booking/ambulance state and creates assignment/history records.
 - `bookings.services.record_status_change` saves status history and releases the active assignment on completion/cancellation.
-- `drivers.services` validates that the acting driver owns an active assignment and that the requested transition is allowed. It updates ambulance patient state at pickup and availability on release.
+- `drivers.services` validates that the acting driver owns an active assignment and that the requested transition is allowed. Arrival requires a confirmed destination, fresh GPS, sufficient GPS accuracy, and server-side proximity within the configured radius. Status changes remain in the existing booking-history model.
 - `patients.geocoding` calls Nominatim with `requests.get`, JSON response, `limit=1`, five-second timeout, and configured User-Agent. It validates ranges and caches successful matches; service errors/no match return actionable error JSON. The call taker must still confirm the pin.
 - There are no Django REST Framework serializers or serializer classes in this project. HTML forms, Django `Form`/`ModelForm`, and `JsonResponse` are used.
 
@@ -319,17 +323,19 @@ No patient/booking data rows, connection values, credentials, or `.env` contents
 
 ### Database configuration
 
-`ambulance_system/settings.py` loads `.env` using `python-dotenv`. `DB_ENGINE` chooses SQLite or MySQL. SQLite is the fallback for unrecognized values. MySQL uses environment variables for database name/user/password/host/port, UTF-8 MB4, and connection age 60 seconds. `channels` uses Redis when `REDIS_URL` is set and otherwise in-memory channels.
+`ambulance_system/settings.py` loads `.env` using `python-dotenv`. MySQL is the only supported backend; non-MySQL `DB_ENGINE` values raise a configuration error. MySQL uses environment variables for database name/user/password/host/port, UTF-8 MB4, and connection age 60 seconds. `channels` uses Redis when `REDIS_URL` is set and otherwise in-memory channels.
 
-The active development environment selected MySQL at inspection time; `DOCKER_SETUP.md` documents a separate SQLite-based Docker configuration. These configurations do not synchronize or migrate data between databases automatically.
+Docker Compose provides MySQL 8.4 with a persistent named volume and a Django web service. The previous SQLite source and external backup are no longer available in this checkout, and no application records were loaded into MySQL.
 
 ## 7. FRONTEND IMPLEMENTATION
 
 - `templates/base.html` provides the shared site shell for most pages. The call-taker dashboard is a standalone dashboard document with its own CSS/JS links.
 - Call-taker form accepts name, contact, patient count, address, hidden latitude/longitude, location-confirmation checkbox, and submission UUID. It displays the geocoding result and map pin. Input address edits clear the pin/coordinates/confirmation; clicking/dragging the Leaflet pin updates the coordinates and clears confirmation.
 - Dispatcher dashboard includes statistics, a Leaflet map, a live queue, selected-case details, map legend, status fields, and a pending-bookings link. JavaScript uses `Map` instances keyed by ambulance ID and booking ID to update existing markers and avoid duplicates.
-- Dispatcher JS polls `/dispatcher/locations/` every five seconds, displays marker popups, handles WebSocket ambulance updates, and calls OSRM for an assigned ambulance-to-patient road route when possible.
-- Driver dashboard lists active assignments, availability controls, GPS-sharing state, patient address, and confirmed-coordinate navigation link. The assigned-booking page presents the next allowed status transition and an OpenStreetMap pickup link.
+- Dispatcher JS polls `/dispatcher/locations/` every five seconds, updates existing markers from authenticated WebSocket events, and displays driver/vehicle/booking identity, journey status, GPS accuracy/freshness, and a remaining-route estimate when OSRM is available.
+- Driver dashboard lists active assignments and availability controls. GPS sharing is started only by the driver's explicit action; the status panel separates browser permission, device GPS, accuracy, network, server sync, freshness, tracking, and navigation state.
+- Live driver navigation is available at `/drivers/navigation/<booking_uuid>/`. It requires the driver's active assignment and a confirmed destination. The page uses `watchPosition` only after driver action, sends CSRF-protected fixes with accuracy and observed time, moves the ambulance marker, and requests OSRM routes only initially or after significant movement/time. A straight-line fallback is labeled and has no ETA.
+- Existing `BookingStatusHistory`, `AmbulanceAssignment`, and `GPSLocation` models provide journey/status/assignment history; no duplicate journey table was introduced.
 - Account portal UI includes role-specific login/registration links, OTP countdown and verification, password visibility toggle, and approval status messages.
 - Existing UI styling is under `static/css/`. No application-wide redesign or frontend framework is present.
 
@@ -337,25 +343,27 @@ The active development environment selected MySQL at inspection time; `DOCKER_SE
 
 ### Leaflet maps and tiles
 
-- Dispatcher map initializes at `[17.6868, 83.2185]`, zoom 11, and renders OpenStreetMap tiles with attribution.
+- Dispatcher map initializes at `[17.6868, 83.2185]`, zoom 11, and renders Esri World Street Map tiles with the service's required source attribution.
 - Call-taker pin map initializes around Visakhapatnam at `[17.6868, 83.2185]`, zoom 12. It places a draggable marker from Nominatim results or a click; adjusting the marker changes the submitted coordinates.
 - Dispatcher uses separate ambulance and patient Leaflet markers. Ambulances use vehicle/staleness styling; patient markers use a red pin. Marker identity is retained by ID and marker location/popup is updated on polling.
 - Selecting an emergency focuses on the confirmed patient point (or ambulance point if there is no confirmed patient point). Popup includes patient name, case ID, emergency type, address, and contact number.
 
 ### Driver GPS path
 
-1. `static/js/gps_tracking.js` calls `navigator.geolocation.watchPosition` while driver dashboard remains open and permission is granted.
-2. Browser sends latitude/longitude to `POST /drivers/location/`.
-3. `ambulances.services.update_driver_location` validates ranges, row-locks the driver's ambulance, updates latest coordinates/time, inserts `GPSLocation`, and publishes a Channels event on commit.
-4. `DispatcherLocationConsumer` sends group updates to authenticated dispatcher-role WebSockets. The dispatcher also polls all fleet and case data every five seconds.
+1. The driver explicitly starts sharing on the navigation page (or driver dashboard); `static/js/gps_tracking.js` then calls `navigator.geolocation.watchPosition` with high accuracy.
+2. The browser sends coordinates, accuracy, booking ID (on navigation), and fix timestamp to `POST /drivers/location/` with CSRF protection. It stops or pauses the watcher on driver action/page exit, queues updates during network loss, and enforces client-side interval/movement/heartbeat limits.
+3. `ambulances.services.update_driver_location` validates ranges and fix freshness, row-locks the driver's ambulance, verifies any booking ownership/active assignment, applies server-side write limits, updates latest coordinates/accuracy/time, inserts `GPSLocation`, and publishes a Channels event on commit.
+4. `DispatcherLocationConsumer` accepts only active dispatcher-role users and sends fleet updates with booking identity/status, GPS accuracy, and freshness. The dispatcher also polls fleet/case data every five seconds.
 
 GPS requires browser permission and a secure context in deployment (localhost is allowed by browsers). If page is closed or permission denied, GPS does not update.
+
+The in-app driver navigation page uses Leaflet to show the latest fresh ambulance point and confirmed patient destination, a moving ambulance marker, OSRM road geometry, remaining distance, and a non-traffic ETA when available. Missing/stale coordinates are not rendered as live; an unconfirmed destination blocks navigation. If OSRM fails, the page labels the direct line as a straight-line fallback and omits ETA.
 
 ### Patient location and geocoding
 
 - Patient coordinates are on `Booking`, not `Patient`, and existing database columns are `patient_latitude`/`patient_longitude`.
 - Nominatim query is initiated by the server at `https://nominatim.openstreetmap.org/search`; address lookup is not per-keystroke autocomplete.
-- Positive results are cached for 30 days. Code serializes requests within a process and uses the `NominatimRequestState` row/DB lock to coordinate requests across MySQL workers, spacing uncached Nominatim queries by one second. Whether this works as intended on SQLite or a multi-process deployment without effective row locks is **NEEDS VERIFICATION**; the current local backend is MySQL.
+- Positive results are cached for 30 days. Code serializes requests within a process and uses the `NominatimRequestState` row/DB lock to coordinate requests across MySQL workers, spacing uncached Nominatim queries by one second. Whether this works as intended on SQLite or a multi-process deployment without effective row locks is **NEEDS VERIFICATION**.
 - User-Agent comes from `NOMINATIM_USER_AGENT`, with a development fallback. Public deployments should set an identifying value with contact/URL and respect [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/).
 - Geocoding is approximate and can return a locality or nearby feature. Dispatch requires explicit call-taker confirmation; unconfirmed coordinates are hidden from the dispatcher feed and driver navigation and assignment service refuses dispatch.
 
@@ -380,9 +388,12 @@ The following are supported by current source and/or automated tests:
 - Driver status workflow: Assigned → Accepted → En Route → Arrived → Patient Picked Up → Completed.
 - Driver availability management outside active assignment.
 - Browser GPS updates and GPS-location history rows.
-- Dispatcher map for fleet and confirmed patient locations, periodic JSON refresh, ambulance update WebSocket, and OSRM route display when applicable.
+- Explicit driver GPS start/pause/resume/stop controls, GPS permission/accuracy/network/sync/freshness status, rate-limited location history, and stale-fix rejection.
+- Driver Leaflet live movement, confirmed-destination OSRM road route, distance/ETA display, and server-validated arrival by fresh/accurate GPS and configured radius.
+- Dispatcher map for fleet and confirmed patient locations, periodic JSON refresh fallback, authenticated ambulance update WebSocket, booking/status correlation, and remaining-route display.
+- Existing booking status/assignment history used for journey timeline; no duplicate journey model.
 - Booking detail visibility checks for dispatcher, creating call taker, and assigned driver.
-- SQLite and MySQL configuration paths in Django settings.
+- MySQL-only configuration in Django settings.
 
 ## 10. CURRENT DEVELOPMENT STATUS
 
@@ -395,28 +406,28 @@ The following are supported by current source and/or automated tests:
 
 ### Partially implemented / needs environment verification
 
-- **Patient geocoding deployment:** latest migrations for confirmation/idempotency and cache state exist, but were pending in the inspected MySQL database. Until migration, runtime code expecting those fields/tables may fail.
+- **Patient geocoding deployment:** migrations for confirmation/idempotency and cache state were pending during the earlier inspection and are now applied in the configured local MySQL database. Verify them separately in any other deployment.
 - **Call-taker live workflow:** source/tests exist, but actual Nominatim availability and exact result for the sample address were not verified against the live public API.
 - **MySQL deployment support:** code/configuration exists; server version, production configuration, backup/restore, and concurrent transaction behavior are **UNKNOWN**.
-- **Dispatcher real-time view:** ambulance changes are pushed by WebSocket, while active emergency list/patient markers refresh by five-second HTTP polling. Emergency changes are not pushed over the socket.
+- **Dispatcher real-time view:** ambulance GPS and assigned journey status are pushed by WebSocket; full emergency queue/patient data refreshes by five-second HTTP polling. Emergency data is not a separate WebSocket stream.
 - **OSRM route:** route is requested only for a selected active assignment with both locations. Availability/accuracy of the external routing endpoint is not guaranteed.
-- **Driver navigation:** confirmed coordinates are exposed in template attributes and OpenStreetMap links, not a dedicated in-app turn-by-turn navigation service.
+- **Driver navigation:** live controls, GPS reporting, OSRM routing, status timeline, and server-side arrival checks are implemented in source and covered by focused backend tests. Real device permissions, public OSRM/tiles availability, and two-browser end-to-end tracking still need manual verification.
 
 ### Not implemented / unsupported
 
 - Driver reject/decline action or reassignment-on-reject.
 - Nearby government-hospital search, hospital table/data source, hospital selection, hospital routing, or completion-at-hospital workflow.
-- Traffic-aware ambulance scoring, traffic conditions, or predicted arrival accuracy.
+- Traffic-aware ambulance scoring, traffic conditions, or guaranteed arrival accuracy.
 - Native Android/iOS driver application; the driver interface is a Django-rendered web dashboard.
 - Dedicated REST serializers/API and versioned API.
-- Automated external end-to-end tests for Nominatim, OSM tiles, OSRM, or real browser/device GPS.
+- Automated external end-to-end tests for Nominatim, Esri map tiles, OSRM, or real browser/device GPS; use separate dispatcher/driver browser sessions for a manual movement test.
 - Production SMS OTP provider, production monitoring, task queue, or automatic data retention for GPS records.
 
 ### Known limitations and risks
 
 - The application describes itself as a demo and is not suitable for real emergency operations without extensive operational/safety assurance.
-- `.env.example` and Docker guide default to SQLite, but the inspected local environment selected MySQL. Docker does not provide a MySQL service or transfer data.
-- `bookings.0003` and `patients.0004` are pending in the inspected active DB.
+- Docker Compose and `.env.example` use MySQL. The SQLite source and external backup were deleted before import, so no legacy data is available in this checkout and no import was completed.
+- `ambulances.0004` adds nullable location accuracy to ambulance and GPS history. It was applied to the configured local database on 2026-11-17 after the missing-column error; existing rows were not rewritten.
 - DB-level one-second geocoding coordination depends on an effective row lock; SQLite does not provide MySQL-equivalent row locking.
 - Call-taker path labels all cases `"Emergency"`; the general dispatcher-created emergency form supports an emergency type but no geocoding UX.
 - A “nearest” vehicle is selected using straight-line distance, not OSRM travel duration or traffic.
@@ -430,7 +441,8 @@ The following are supported by current source and/or automated tests:
 ### What source evidence establishes
 
 - Current source includes a Nominatim geocoding service, cache and request-state models, call-taker map confirmation, dispatcher patient markers, and driver coordinate exposure.
-- Current migrations `bookings.0003_booking_location_confirmed_booking_submission_token` and `patients.0004_geocodingcache_nominatimrequeststate` add the confirmation/idempotency metadata and geocoding cache/rate-limit tables. They were generated on 2026-11-11 according to migration headers and are pending in the inspected DB.
+- This task added explicit live GPS controls, accurate/stale GPS validation, route progress, dispatcher event correlation, and arrival geofence checks. It generated `ambulances.0004_ambulance_location_accuracy_meters_and_more`; that migration was applied to the configured local MySQL database on 2026-11-17 after a missing-column error.
+- Migrations `bookings.0003_booking_location_confirmed_booking_submission_token` and `patients.0004_geocodingcache_nominatimrequeststate` add confirmation/idempotency metadata and geocoding cache/rate-limit tables. They were applied in the configured local database, as confirmed by `showmigrations` on 2026-11-17.
 - Relevant current implementation files are `patients/geocoding.py`, `patients/models.py`, `patients/forms.py`, `patients/views.py`, `patients/urls.py`, `templates/patients/call_taker_dashboard.html`, `static/js/call-taker-dashboard.js`, `static/css/call-taker-dashboard.css`, `dispatcher/views.py`, `static/js/dispatcher.js`, `bookings/services.py`, `templates/drivers/driver_dashboard.html`, and `templates/drivers/assigned_booking.html`. Tests cover those paths in the corresponding `patients`, `dispatcher`, `bookings`, and `drivers` test modules.
 
 ### What cannot be established
@@ -441,11 +453,11 @@ The repository's `.git` directory exists, but `git.exe` was not found on PATH or
 
 | Priority | Task | Dependencies / notes |
 |---|---|---|
-| P0 | Back up the configured MySQL database; review and apply pending migrations; run `showmigrations` and schema checks. | Required before using current confirmation/cache code against this database. Confirm target DB with operator before migration. |
-| P0 | Run an end-to-end call-taker → dispatcher → driver workflow, including Nominatim error/manual-pin paths. | Depends on P0 migrations, approved test accounts, a GPS-enabled test driver, and network availability. Keep test data non-production. |
+| P0 | Back up each deployment target and verify its migration/schema state. | `ambulances.0004` is applied in the configured local database; other environments may differ. |
+| P0 | Run two-browser call-taker → dispatcher → driver verification with simulated/device GPS, denied permission, offline/reconnect, stale fix, pause/resume, and assignment cancellation. | Requires a non-production DB with reviewed migrations, approved test accounts, HTTPS or localhost, and network access to map/OSRM. |
 | P1 | Test MySQL concurrency/idempotency and geocoding rate-limit behavior across multiple workers. | Depends on an available MySQL test database; verify the DB row lock and 1-second minimum under concurrent uncached requests. |
 | P1 | Decide and implement a driver reject/decline business workflow if the requirement still stands. | Requires policy for assignment release/reassignment and dispatcher notifications; do not infer reject semantics. |
-| P1 | Decide whether real-time emergency updates are required rather than five-second polling. | Would require a booking event publishing contract and dispatcher consumer/client handling; current socket only pushes ambulance updates. |
+| P1 | Decide whether real-time emergency queue changes are required rather than five-second polling. | Current socket pushes ambulance/booking status updates; full queue refresh still uses HTTP polling. |
 | P2 | Define government hospital source, validation, data model/API, search radius, and routing policy. | Product/data-source decisions required; no existing hospital data/model exists. |
 | P2 | Determine whether ambulance ranking should include road time/traffic and select an appropriate supported provider. | Existing nearest-vehicle logic is Haversine; public OSRM ETA is used only for a displayed route and is not traffic-backed. |
 | P2 | Add production-ready OTP provider, operational logging/monitoring, retention/backups, and deployment hardening. | Configure provider, privacy/retention requirements, hosting, HTTPS, and secrets management. |
@@ -458,13 +470,13 @@ No DRF routers, serializers, or versioned API are present. The following JSON en
 |---|---|---|---|---|
 | `/patients/geocode/` | POST | Approved CALL_TAKER role; session + CSRF | Form-encoded `address` (1–250 chars) | Success: `{"ok": true, "latitude": "...", "longitude": "...", "display_name": "...", "cached": bool}`. Lookup/no-result/provider errors return `{"ok": false, "error": "..."}`; invalid address is HTTP 400. `Cache-Control: private, no-store`. |
 | `/dispatcher/locations/` | GET | Approved DISPATCHER role; session | None | `{"locations":[...],"emergencies":[...],"stats":{...}}`. Coordinate values are numbers or null. Patient coordinates are null unless confirmed. Response is private/no-store. |
-| `/drivers/location/` | POST | Approved DRIVER role; session + CSRF | Form-encoded `latitude`, `longitude` | Success: `{"updated":true,"vehicle_number":"...","updated_at":"ISO-8601"}`. Validation/no ambulance returns `{"error":"..."}` HTTP 400. Also writes GPS history and publishes a dispatcher event. |
+| `/drivers/location/` | POST | Approved DRIVER role; session + CSRF | Form-encoded `latitude`, `longitude`, `accuracy_meters`, `observed_at` (browser fix epoch milliseconds); `booking_id` on navigation page | Success returns `updated`, vehicle, accepted/stored coordinates, accuracy, and server `updated_at`. Invalid/stale coordinates or fix, unauthorized booking, or missing ambulance returns `{"error":"..."}` HTTP 400. Rate-limited samples are not written to GPS history. Accepted samples update the ambulance, create `GPSLocation`, and publish a dispatcher event. |
 | `/accounts/{call-taker,dispatcher,driver}/register/send-otp/` | POST | Session-bound; CSRF; no authenticated account required | Form-encoded `phone_number` | Success: `ok`, message, `expires_in` (300), `retry_after` (60). Invalid input HTTP 400, resend cooldown HTTP 429, unconfigured/unavailable delivery HTTP 503. |
 | `/accounts/{call-taker,dispatcher,driver}/register/verify-otp/` | POST | Same session that requested OTP; CSRF | Form-encoded `phone_number`, `otp` | Success: `{"ok":true,"verified":true,"message":"Phone number verified."}`. Invalid/mismatched/expired challenge is HTTP 400; attempts/cooldown limits use HTTP 429. |
 | `/drivers/register/send-otp/` | POST | Session-bound; CSRF | `phone_number` | Driver registration OTP equivalent. |
 | `/drivers/register/verify-otp/` | POST | Session-bound; CSRF | `phone_number`, `otp` | Driver registration OTP equivalent. |
 
-`/dispatcher/locations/` location entries contain `id`, `vehicle_number`, `driver`, `driver_phone`, `latitude`, `longitude`, `availability`, `patient_status`, `updated_at`, `gps_stale`, `active_booking_id`. Emergency entries contain case id, patient/name/contact, emergency type, address, number of patients, confirmed patient coordinates, confirmation flag, requested time/status, assignment/driver/ambulance coordinates and freshness, and optional nearest eligible ambulance. Stats contain ambulance totals/availability/busy, active emergencies, and completed today.
+`/dispatcher/locations/` location entries contain `id`, vehicle/driver identity, `latitude`, `longitude`, `accuracy_meters`, availability, patient status, `updated_at`, `gps_stale`, `active_booking_id`, and `booking_status`. Emergency entries contain case id, patient/name/contact, emergency type, address, number of patients, confirmed patient coordinates, confirmation flag, requested time/status, assignment/driver/ambulance coordinates, GPS accuracy/freshness, and optional nearest eligible ambulance. Stats contain ambulance totals/availability/busy, active emergencies, and completed today.
 
 ### Server-rendered form routes and WebSocket
 
@@ -474,8 +486,9 @@ No DRF routers, serializers, or versioned API are present. The following JSON en
 | `/dispatcher/bookings/` | GET | Approved dispatcher | Shows pending bookings and an eligible ambulance choice/suggestion. |
 | `/dispatcher/bookings/<uuid>/assign/` | POST | Approved dispatcher + CSRF | Reads `ambulance` form selection; successful assignment redirects to queue. |
 | `/drivers/bookings/<uuid>/` | GET/POST | Approved assigned driver | POST includes next `status` from the form's allowed transition list. |
+| `/drivers/navigation/<uuid>/` | GET/POST | Approved driver with active booking assignment | Shows the confirmed destination, live GPS/route controls, GPS status panel, and status history. POST advances only to the next allowed status; arrival requires fresh, sufficiently accurate GPS within the configured radius. |
 | `/drivers/availability/` | POST | Approved driver + CSRF | Form-encoded `availability_status`; changes blocked during active assignment or while patient onboard if setting available. |
-| `/ws/locations/` | WebSocket | Authenticated dispatcher role | Receives ambulance location/status group events; non-dispatchers are closed with code 4403. Events contain ambulance ID, vehicle number, driver, coordinates, availability, patient status, and update time. |
+| `/ws/locations/` | WebSocket | Active authenticated dispatcher role | Receives fleet location and journey status events; other users are closed with code 4403. Events contain ambulance identity, coordinates/accuracy/freshness, active booking ID/status, availability, and patient status. |
 
 Other useful pages: `/`, `/accounts/call-taker/login/`, `/accounts/dispatcher/login/`, `/drivers/login/`, `/dispatcher/`, `/dispatcher/ambulances/`, `/bookings/<uuid>/`, and `/accounts/admin/approvals/`.
 
@@ -512,15 +525,15 @@ DB_ENGINE=mysql
 DB_NAME=ambulance_db
 DB_USER=ambulance_app
 DB_PASSWORD=<your-local-secret>
-DB_HOST=localhost
-DB_PORT=3306
+DB_HOST=127.0.0.1
+DB_PORT=3307
 DJANGO_SECRET_KEY=<long-random-secret>
 DJANGO_DEBUG=True
 DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
 NOMINATIM_USER_AGENT=AmbulenceBooking/1.0 (maintainer contact or application URL)
 ```
 
-No actual local values are recorded in this handover. Use a distinct test account if running Django tests against MySQL; its privileges may need to create/drop a test database. Do not switch a populated SQLite installation to MySQL (or vice versa) expecting automatic data transfer.
+No actual local values are recorded in this handover. Use a distinct test account if running Django tests against MySQL; its privileges may need to create/drop a test database. No SQLite fixture is available to transfer in this checkout.
 
 ### Migrate, create admin, start server
 
@@ -532,14 +545,7 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-At inspection time, current MySQL reported these new migrations as unapplied:
-
-```text
-bookings.0003_booking_location_confirmed_booking_submission_token
-patients.0004_geocodingcache_nominatimrequeststate
-```
-
-Back up the target database and verify the target environment before applying. Do not run these commands against production without the project's normal release/backup review.
+Apply migrations to the selected MySQL database after checking the target environment. Migrations create the schema but do not import historical SQLite records. Do not run these commands against production without the project's normal release/backup review.
 
 Open `http://127.0.0.1:8000/`. Admin is `/admin/`. Staff self-register through the corresponding role portal; accounts require administrator approval before login.
 
@@ -554,7 +560,7 @@ Local OTP delivery is console-based only when `DEBUG=True`. A production OTP bac
 
 ### Docker
 
-`docker-compose.yml` runs only a Django web container and bind-mounts the project. `DOCKER_SETUP.md` describes SQLite using the host `db.sqlite3`; there is no MySQL service/container. Use the Docker instructions in that file and do not assume it is connected to the active local MySQL database.
+`docker-compose.yml` runs Django and MySQL 8.4, binds the project into the web container, and persists MySQL data in the `mysql_data` volume. The web service connects to MySQL by the Compose hostname `db`.
 
 ## 15. ENVIRONMENT CONFIGURATION
 
@@ -563,15 +569,20 @@ Local OTP delivery is console-based only when `DEBUG=True`. A production OTP bac
 | `DJANGO_SECRET_KEY` | Django signing/session secret; source has an insecure development fallback. Set a unique secret outside source. | **Yes** |
 | `DJANGO_DEBUG` | Debug mode; defaults false in settings. Development OTP defaults to console backend only when true. | No |
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated host list; default `127.0.0.1,localhost`. | No |
-| `DB_ENGINE` | Select `sqlite3` (default), `mysql`, or backend alias. | No |
-| `DB_NAME` | Database name or SQLite file path; SQLite default `db.sqlite3`. | May identify infrastructure |
+| `DB_ENGINE` | Must be `mysql` (default); other backends are rejected. | No |
+| `DB_NAME` | Database name; MySQL default `ambulance_db`. | May identify infrastructure |
 | `DB_USER` | MySQL username. | Sensitive operational info |
 | `DB_PASSWORD` | MySQL password. | **Yes** |
-| `DB_HOST` | MySQL host. | May identify infrastructure |
-| `DB_PORT` | MySQL port; default `3306`. | No |
+| `DB_HOST` | MySQL host; local default `127.0.0.1`, Compose uses `db`. | May identify infrastructure |
+| `DB_PORT` | MySQL port; local Docker mapping uses `3307`, Compose uses `3306`. | No |
 | `NOMINATIM_USER_AGENT` | Identifies this app to Nominatim. Default is a generic app identifier; production should include a maintainer contact/URL. | No |
 | `REGISTRATION_OTP_DELIVERY_BACKEND` | Python dotted path to OTP delivery callable. Defaults to console backend only in DEBUG; blank otherwise. | No (provider may require separate secrets) |
 | `REDIS_URL` | Optional Channels Redis URL; unset uses in-memory channel layer. | Can contain credentials; **treat as secret** |
+| `DRIVER_GPS_MIN_INTERVAL_SECONDS` | Minimum seconds between accepted GPS writes; default 5. | No |
+| `DRIVER_GPS_MIN_MOVEMENT_METERS` | Minimum movement before storing a new sample; default 15 m. | No |
+| `DRIVER_GPS_HEARTBEAT_SECONDS` | Maximum stationary interval before storing a heartbeat; default 60 s. | No |
+| `DRIVER_ARRIVAL_RADIUS_METERS` | Maximum GPS-error-adjusted distance from confirmed destination for driver arrival; default 150 m. | No |
+| `DRIVER_ARRIVAL_MAX_ACCURACY_METERS` | Maximum measured GPS accuracy accepted for arrival; default 50 m. | No |
 
 `.env` is private and must not be copied into handovers, logs, screenshots, or commits. The actual contents were intentionally not inspected/documented. `.env.example` is an example, not a statement of the live database selection.
 
@@ -592,7 +603,7 @@ They cover role and portal authorization, OTP session/expiry/attempt/cooldown be
 
 ### Result observed
 
-The latest full test run available during the prior implementation work reported **73 tests passed** with no failures. Django system checks passed and `makemigrations --check --dry-run` reported no model/migration drift. The sample address test uses a mock Nominatim response; it does not prove a live result exists for that exact address. This handover-only task did not rerun the suite.
+The latest full test run for this GPS implementation reported **90 tests passed** with no failures. Django system checks passed and `makemigrations --check --dry-run` reported no model/migration drift. Focused driver/dispatcher tests cover GPS input freshness, throttling, assignment ownership/cancellation, arrival accuracy/radius/freshness, WebSocket authorization, and a service-to-WebSocket update. Updated JavaScript assets were syntax-checked in a browser. The sample address test uses a mock Nominatim response; it does not prove a live result exists for that exact address. Browser/device GPS and external OSRM were not exercised end-to-end.
 
 Run:
 
@@ -611,9 +622,11 @@ python manage.py makemigrations --check --dry-run
 5. Submit a confirmed request; verify one booking, one patient, UUID case ID, paired coordinate columns, `location_confirmed=true`, and an initial status-history row.
 6. Resubmit the same token; verify no duplicate patient or booking.
 7. As dispatcher, verify the confirmed patient marker and popup, select the queue case and check map focus; assign an eligible ambulance with a recent GPS fix.
-8. As driver, verify the assigned case displays the same coordinates/navigation link. Allow browser GPS and verify dispatcher vehicle marker updates while page remains open.
-9. Advance through Allowed statuses, verify history, pickup patient state, completion releases assignment, and ambulance becomes available.
-10. Inspect MySQL migration/table state and run the complete suite against the intended test environment.
+8. As driver, accept the assignment and open `/drivers/navigation/<booking_uuid>/`. Confirm that Start Navigation is explicit, browser permission is requested, and GPS status/accuracy/freshness are visible.
+9. Simulate or allow movement; confirm the driver marker moves and the dispatcher marker/status update through WebSocket, with five-second polling as fallback. Verify pause/resume, offline/reconnect, stale GPS, and denied permission.
+10. Test OSRM success and failure; verify route recalculation is throttled and fallback is clearly labeled without ETA. Advance through statuses and verify out-of-radius, stale, and inaccurate arrival attempts are rejected.
+11. Verify status/assignment history, pickup patient state, completion release, and denial of another driver's booking/location.
+12. Back up the confirmed MySQL target, review and apply the pending accuracy migration, inspect table state, and run the complete suite against the intended test environment.
 
 ## 17. IMPORTANT DEVELOPMENT RULES
 
@@ -633,15 +646,14 @@ python manage.py makemigrations --check --dry-run
 
 ## 18. NEXT DEVELOPMENT TASK
 
-The most logical next task is a **database-safe rollout and end-to-end verification of the confirmed patient-location workflow**:
+The next task is a **database-safe rollout and two-browser GPS workflow verification**:
 
-1. Confirm which MySQL database is the intended target and make a verified backup.
-2. Review and apply `bookings.0003` and `patients.0004` in that environment.
-3. Run focused and full Django tests on the intended engine (including MySQL concurrency checks for idempotency and Nominatim rate limiting).
-4. Test address lookup/manual pin, confirmed booking persistence, dispatcher marker/queue focus, assignment gating, and driver coordinate delivery.
-5. Record verified deployment/test results here without exposing database or Nominatim details that are private.
+1. Back up the intended deployment MySQL database and inspect its migration state. The configured local `ambulance_db` has `ambulances.0004` applied.
+2. Review and apply any migrations that remain pending on the intended target.
+3. Use separate dispatcher and driver sessions to test assignment, explicit GPS start/pause/resume, simulated movement, WebSocket and polling updates, network loss/reconnect, stale/denied GPS, route-service failure, arrival validation, and assignment cancellation.
+4. Record the test environment and results without exposing credentials or patient data.
 
-This task precedes adding driver rejection or hospital features because both need product decisions and depend on a trustworthy, migrated booking/location workflow.
+Do not treat public OSM/OSRM routing or browser geolocation as production-grade emergency navigation. Production readiness still requires policy, hosting, security, monitoring, retention, backup/restore, and operational safety work.
 
 ## INSTRUCTIONS FOR THE NEXT GITHUB COPILOT
 

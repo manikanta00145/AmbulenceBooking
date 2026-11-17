@@ -1,0 +1,153 @@
+.driver-navigation-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.driver-navigation-heading h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+}
+
+.driver-navigation-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.driver-navigation-summary article {
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: .75rem;
+  background: var(--surface);
+}
+
+.driver-navigation-summary h2 {
+  margin: 0 0 .4rem;
+  font-size: 1.05rem;
+}
+
+.driver-navigation-summary p {
+  margin: .25rem 0;
+}
+
+.driver-navigation-warning {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.driver-navigation-time,
+.driver-navigation-map-status {
+  color: var(--muted);
+}
+
+.driver-navigation-map {
+  width: 100%;
+  height: calc(100vh - 350px);
+  min-height: 360px;
+  border: 1px solid var(--line);
+  border-radius: .75rem;
+  background: #e4ecef;
+}
+
+.driver-navigation-marker {
+  border: 0;
+  background: transparent;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.driver-navigation-destination {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 50% 50% 50% 0;
+  background: #b42332;
+  color: white;
+  font-size: 1rem;
+  font-weight: 800;
+  transform: rotate(-45deg);
+  box-shadow: 0 1px 5px #172b3a66;
+}
+
+.driver-navigation-destination span {
+  transform: rotate(45deg);
+}
+
+.driver-navigation-map-status {
+  margin: .5rem 0 0;
+}
+
+.driver-gps-controls-panel {
+  margin: 0 0 1rem;
+}
+
+.driver-gps-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-bottom: .75rem;
+}
+
+.driver-gps-controls [hidden] {
+  display: none;
+}
+
+.driver-gps-status {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .5rem 1rem;
+  margin: .5rem 0;
+}
+
+.driver-gps-status > div {
+  min-width: 0;
+}
+
+.driver-gps-status dd {
+  font-weight: 700;
+}
+
+.driver-gps-status dd[data-state="warning"] {
+  color: var(--danger);
+}
+
+.driver-gps-status dd[data-state="good"] {
+  color: var(--brand-dark);
+}
+
+.driver-journey-status {
+  margin-top: 1rem;
+}
+
+.driver-journey-timeline {
+  padding-left: 1.25rem;
+}
+
+.driver-journey-timeline li {
+  margin: .4rem 0;
+}
+
+@media (max-width: 700px) {
+  .driver-navigation-heading {
+    flex-direction: column;
+  }
+
+  .driver-navigation-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .driver-navigation-map {
+    height: 65vh;
+    min-height: 320px;
+  }
+
+  .driver-gps-status {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

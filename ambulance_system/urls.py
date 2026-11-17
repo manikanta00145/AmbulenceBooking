@@ -13,4 +13,6 @@ urlpatterns = [
     path("ambulances/", include("ambulances.urls")),
     path("dispatcher/", include("dispatcher.urls")),
     path("drivers/", include("drivers.urls")),
+    path("hospitals/", include("hospitals.urls")),
+    path("notifications/", include("notifications.urls")),
 ]

@@ -14,7 +14,10 @@ class GPSLocationInline(admin.TabularInline):
 class AmbulanceAdmin(admin.ModelAdmin):
     list_display = (
         "vehicle_number",
+        "vehicle_type",
+        "vehicle_model",
         "driver",
+        "hospital",
         "availability_status",
         "patient_status",
         "location_updated_at",

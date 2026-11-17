@@ -1,22 +1,50 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import role_required
-from bookings.models import Booking, BookingStatusHistory
-from patients.forms import CallTakerEmergencyRequestForm, EmergencyRequestForm
+from accounts.forms import PatientProfileForm
+from ambulances.models import Ambulance
+from ambulances.services import find_nearest_ambulance
+from bookings.models import AmbulanceAssignment, Booking, BookingStatusHistory
+from notifications.services import notify_users
+from patients.forms import (
+    CallTakerEmergencyRequestForm,
+    EmergencyRequestForm,
+    PatientEmergencyRequestForm,
+)
 from patients.geocoding import geocode_address
+from patients.models import Patient
 
 
 @login_required
-@role_required("CALL_TAKER", "DISPATCHER")
+@role_required("CALL_TAKER", "DISPATCHER", "PATIENT")
 def create_request(request):
     is_call_taker = request.user.role == request.user.Role.CALL_TAKER
-    form_class = CallTakerEmergencyRequestForm if is_call_taker else EmergencyRequestForm
+    is_patient = request.user.role == request.user.Role.PATIENT
+    if is_patient:
+        form_class = PatientEmergencyRequestForm
+    elif is_call_taker:
+        form_class = CallTakerEmergencyRequestForm
+    else:
+        form_class = EmergencyRequestForm
+    if is_patient:
+        patient_profile, _ = Patient.objects.get_or_create(
+            user=request.user,
+            defaults={
+                "name": request.user.get_full_name() or request.user.username,
+                "contact_number": request.user.phone_number or "0000000000",
+                "email": request.user.email,
+            },
+        )
+    else:
+        patient_profile = None
+
     if request.method == "POST":
         form = form_class(request.POST)
         if form.is_valid():
@@ -34,10 +62,13 @@ def create_request(request):
                 return redirect("bookings:detail", booking_id=existing_booking.pk)
             try:
                 with transaction.atomic():
-                    patient = form.save_patient()
+                    patient = patient_profile if is_patient else form.save_patient()
                     booking = Booking.objects.create(
                         patient=patient,
-                        number_of_patients=form.cleaned_data["number_of_patients"],
+                        number_of_patients=form.cleaned_data.get(
+                            "number_of_patients",
+                            1,
+                        ),
                         emergency_type=(
                             form.cleaned_data["emergency_type"]
                             if not is_call_taker
@@ -50,6 +81,9 @@ def create_request(request):
                             "location_confirmed",
                             False,
                         ),
+                        destination_hospital=form.cleaned_data.get(
+                            "destination_hospital"
+                        ),
                         submission_token=submission_token,
                         created_by=request.user,
                     )
@@ -58,6 +92,51 @@ def create_request(request):
                         new_status=booking.status,
                         changed_by=request.user,
                     )
+
+                    # Assign an available ambulance if possible
+                    available_amb = None
+                    if booking.location_confirmed and booking.latitude is not None and booking.longitude is not None:
+                        available_amb = find_nearest_ambulance(booking.latitude, booking.longitude)
+                    if not available_amb:
+                        available_amb = Ambulance.objects.filter(
+                            availability_status=Ambulance.Availability.AVAILABLE,
+                            patient_status=Ambulance.PatientStatus.OFF,
+                            driver__user__is_active=True,
+                            driver__user__role="DRIVER",
+                        ).first()
+
+                    if available_amb:
+                        old_status = booking.status
+                        booking.assigned_ambulance = available_amb
+                        booking.status = Booking.Status.ASSIGNED
+                        booking.save(update_fields=["assigned_ambulance", "status"])
+                        available_amb.availability_status = Ambulance.Availability.UNAVAILABLE
+                        available_amb.save(update_fields=["availability_status"])
+                        AmbulanceAssignment.objects.create(
+                            booking=booking,
+                            ambulance=available_amb,
+                            assigned_by=request.user,
+                        )
+                        BookingStatusHistory.objects.create(
+                            booking=booking,
+                            old_status=old_status,
+                            new_status=booking.status,
+                            changed_by=request.user,
+                            note="Ambulance assigned upon emergency request.",
+                        )
+                        notify_users(
+                            users=(request.user, patient.user, available_amb.driver.user),
+                            title="Ambulance assigned",
+                            message=f"{available_amb.vehicle_number} has been assigned to booking {booking.pk}.",
+                            booking=booking,
+                        )
+                    else:
+                        notify_users(
+                            users=(request.user, patient.user),
+                            title="Emergency request recorded",
+                            message=f"Booking {booking.pk} has been recorded.",
+                            booking=booking,
+                        )
             except IntegrityError:
                 if not submission_token:
                     raise
@@ -114,11 +193,75 @@ def create_request(request):
                 "case_history": case_history,
             },
         )
+    if is_patient:
+        bookings = (
+            Booking.objects.filter(patient=patient_profile)
+            .select_related("assigned_ambulance", "destination_hospital")
+            .order_by("-requested_at")
+        )
+        return render(
+            request,
+            "patients/patient_dashboard.html",
+            {
+                "form": form,
+                "patient": patient_profile,
+                "bookings": bookings,
+            },
+        )
     return render(request, "patients/patient_form.html", {"form": form})
 
 
 @login_required
-@role_required("CALL_TAKER")
+@role_required("PATIENT")
+def profile(request):
+    patient, _ = Patient.objects.get_or_create(
+        user=request.user,
+        defaults={
+            "name": request.user.get_full_name() or request.user.username,
+            "contact_number": request.user.phone_number or "0000000000",
+            "email": request.user.email,
+        },
+    )
+    if request.method == "POST":
+        form = PatientProfileForm(request.POST, instance=patient)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    patient = form.save(commit=False)
+                    patient.user = request.user
+                    patient.save()
+                    first_name, _, last_name = patient.name.strip().partition(" ")
+                    request.user.email = patient.email
+                    request.user.phone_number = patient.contact_number
+                    request.user.first_name = first_name
+                    request.user.last_name = last_name
+                    request.user.save(
+                        update_fields=[
+                            "email",
+                            "phone_number",
+                            "first_name",
+                            "last_name",
+                        ]
+                    )
+            except IntegrityError:
+                form.add_error(
+                    "contact_number",
+                    "This mobile number is already registered.",
+                )
+            else:
+                messages.success(request, "Your patient profile was updated.")
+                return redirect("patients:profile")
+    else:
+        form = PatientProfileForm(instance=patient)
+    return render(
+        request,
+        "patients/profile.html",
+        {"form": form, "patient": patient},
+    )
+
+
+@login_required
+@role_required("CALL_TAKER", "PATIENT", "DISPATCHER")
 @require_POST
 def geocode_address_view(request):
     address = request.POST.get("address", "").strip()

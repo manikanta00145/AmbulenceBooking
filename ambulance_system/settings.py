@@ -1,6 +1,8 @@
 import os
+import math
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 
@@ -26,6 +28,33 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+
+def _positive_float_setting(name, default):
+    try:
+        value = float(os.environ.get(name, str(default)))
+    except ValueError as error:
+        raise ImproperlyConfigured(f"{name} must be a positive number.") from error
+    if not math.isfinite(value) or value <= 0:
+        raise ImproperlyConfigured(f"{name} must be a positive number.")
+    return value
+
+
+DRIVER_GPS_MIN_INTERVAL_SECONDS = _positive_float_setting(
+    "DRIVER_GPS_MIN_INTERVAL_SECONDS", 5
+)
+DRIVER_GPS_MIN_MOVEMENT_METERS = _positive_float_setting(
+    "DRIVER_GPS_MIN_MOVEMENT_METERS", 15
+)
+DRIVER_GPS_HEARTBEAT_SECONDS = _positive_float_setting(
+    "DRIVER_GPS_HEARTBEAT_SECONDS", 60
+)
+DRIVER_ARRIVAL_RADIUS_METERS = _positive_float_setting(
+    "DRIVER_ARRIVAL_RADIUS_METERS", 150
+)
+DRIVER_ARRIVAL_MAX_ACCURACY_METERS = _positive_float_setting(
+    "DRIVER_ARRIVAL_MAX_ACCURACY_METERS", 50
+)
+
 INSTALLED_APPS = [
     "daphne",
     "django.contrib.admin",
@@ -41,6 +70,8 @@ INSTALLED_APPS = [
     "ambulances",
     "dispatcher",
     "drivers",
+    "hospitals",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -52,6 +83,17 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = os.environ.get(
+    "SESSION_COOKIE_SECURE", str(not DEBUG)
+).strip().lower() in {"1", "true", "yes"}
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SECURE = os.environ.get(
+    "CSRF_COOKIE_SECURE", str(not DEBUG)
+).strip().lower() in {"1", "true", "yes"}
 
 ROOT_URLCONF = "ambulance_system.urls"
 
@@ -84,37 +126,23 @@ else:
         "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
     }
 
-db_engine = os.environ.get("DB_ENGINE", "sqlite3").strip().lower()
-if db_engine in {"sqlite", "sqlite3", "django.db.backends.sqlite3"}:
-    db_name = os.environ.get("DB_NAME", "db.sqlite3")
-    if db_name != ":memory:" and not os.path.isabs(db_name):
-        db_name = str(BASE_DIR / db_name)
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": db_name,
-        }
+db_engine = os.environ.get("DB_ENGINE", "mysql").strip().lower()
+if db_engine not in {"mysql", "django.db.backends.mysql"}:
+    raise ImproperlyConfigured(
+        "This application requires MySQL; DB_ENGINE must be set to 'mysql'."
+    )
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": os.environ.get("DB_NAME", "ambulance_db"),
+        "USER": os.environ.get("DB_USER", "root"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+        "HOST": os.environ.get("DB_HOST", "localhost"),
+        "PORT": os.environ.get("DB_PORT", "3306"),
+        "OPTIONS": {"charset": "utf8mb4"},
+        "CONN_MAX_AGE": 60,
     }
-elif db_engine in {"mysql", "django.db.backends.mysql"}:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.mysql",
-            "NAME": os.environ.get("DB_NAME", "ambulance_db"),
-            "USER": os.environ.get("DB_USER", ""),
-            "PASSWORD": os.environ.get("DB_PASSWORD", ""),
-            "HOST": os.environ.get("DB_HOST", "localhost"),
-            "PORT": os.environ.get("DB_PORT", "3306"),
-            "OPTIONS": {"charset": "utf8mb4"},
-            "CONN_MAX_AGE": 60,
-        }
-    }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": str(BASE_DIR / "db.sqlite3"),
-        }
-    }
+}
 
 AUTH_USER_MODEL = "accounts.User"
 AUTH_PASSWORD_VALIDATORS = [

@@ -11,6 +11,7 @@ class Driver(models.Model):
     )
     driver_name = models.CharField(max_length=120)
     phone_number = models.CharField(max_length=30, blank=True)
+    address = models.CharField(max_length=250, blank=True)
     license_number = models.CharField(max_length=60, null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

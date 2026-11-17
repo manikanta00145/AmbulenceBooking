@@ -28,14 +28,15 @@ def phone_number_digits(value):
     return re.sub(r"\D", "", value or "")
 
 
-def phone_number_is_registered(phone_number):
+def phone_number_is_registered(phone_number, exclude_user_id=None):
     digits = phone_number_digits(phone_number)
+    users = User.objects.exclude(phone_number="")
+    if exclude_user_id is not None:
+        users = users.exclude(pk=exclude_user_id)
     return any(
         phone_number_digits(existing)
         == digits
-        for existing in User.objects.exclude(phone_number="").values_list(
-            "phone_number", flat=True
-        )
+        for existing in users.values_list("phone_number", flat=True)
     )
 
 

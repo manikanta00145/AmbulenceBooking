@@ -88,6 +88,7 @@ class DispatcherPageTests(TestCase):
             latitude=17.72,
             longitude=83.22,
             location_updated_at=timezone.now(),
+            location_accuracy_meters=8,
         )
         assigned_patient = Patient.objects.create(
             name="Assigned Case Patient",
@@ -144,6 +145,15 @@ class DispatcherPageTests(TestCase):
         )
         self.assertEqual(assigned_case["ambulance_id"], assigned_ambulance.pk)
         self.assertEqual(assigned_case["driver"], assigned_driver.driver_profile.driver_name)
+        assigned_location = next(
+            item
+            for item in data["locations"]
+            if item["id"] == assigned_ambulance.pk
+        )
+        self.assertEqual(assigned_location["active_booking_id"], str(assigned_booking.pk))
+        self.assertEqual(assigned_location["booking_status"], Booking.Status.ASSIGNED)
+        self.assertEqual(assigned_location["accuracy_meters"], 8)
+        self.assertEqual(assigned_case["gps_accuracy_meters"], 8)
         self.assertEqual(data["stats"]["total_ambulances"], 3)
         self.assertEqual(data["stats"]["active_emergencies"], 2)
 

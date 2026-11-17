@@ -1,19 +1,50 @@
 services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-ambulance_db}
+      MYSQL_USER: ${MYSQL_APP_USER:-ambulance_app}
+      MYSQL_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
   web:
     build:
       context: .
       dockerfile: Dockerfile
     working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
     env_file:
       - .env
     environment:
       DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost}
-      DB_ENGINE: ${DB_ENGINE:-sqlite3}
-      DB_NAME: ${DB_NAME:-db.sqlite3}
+      DB_ENGINE: mysql
+      DB_NAME: ${DB_NAME:-ambulance_db}
+      DB_USER: ${MYSQL_APP_USER:-ambulance_app}
+      DB_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
+      DB_HOST: db
+      DB_PORT: "3306"
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - .:/app
     init: true
     restart: unless-stopped
+
+volumes:
+  mysql_data:

@@ -20,11 +20,19 @@ def detail(request, booking_id):
         and booking.assigned_ambulance_id is not None
         and booking.assigned_ambulance.driver.user_id == request.user.pk
     )
+    visible_to_patient = (
+        request.user.role == request.user.Role.PATIENT
+        and (
+            booking.created_by_id == request.user.pk
+            or (booking.patient_id and booking.patient.user_id == request.user.pk)
+        )
+    )
     if not (
         request.user.is_superuser
         or request.user.role == request.user.Role.DISPATCHER
         or visible_to_call_taker
         or visible_to_assigned_driver
+        or visible_to_patient
     ):
         raise PermissionDenied
     return render(request, "bookings/booking_details.html", {"booking": booking})

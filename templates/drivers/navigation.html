@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Live navigation · Ambulance Dispatch{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="{% static 'css/driver-navigation.css' %}">
+{% endblock %}
+{% block content %}
+<section
+  class="driver-navigation"
+  {% if destination_verified %}
+    data-gps-tracker
+    data-location-url="{% url 'drivers:location' %}"
+    data-booking-id="{{ booking.pk }}"
+    data-booking-status="{{ booking.status }}"
+    data-gps-last-updated="{{ last_location_update|date:'c' }}"
+    data-gps-latitude="{{ gps_latitude|default_if_none:'' }}"
+    data-gps-longitude="{{ gps_longitude|default_if_none:'' }}"
+    data-gps-accuracy="{{ gps_accuracy_meters|default_if_none:'' }}"
+    data-gps-stale-after-seconds="{{ gps_stale_after_seconds }}"
+    data-gps-min-interval-ms="{{ gps_min_interval_ms }}"
+    data-gps-min-movement-meters="{{ gps_min_movement_meters }}"
+    data-gps-heartbeat-ms="{{ gps_heartbeat_ms }}"
+    data-route-url="https://router.project-osrm.org/route/v1/driving/"
+    data-route-available="{{ route_available|yesno:'true,false' }}"
+  {% endif %}
+>
+  <header class="driver-navigation-heading">
+    <div>
+      <p class="eyebrow">Ambulance {{ ambulance.vehicle_number }}</p>
+      <h1>Live ambulance navigation</h1>
+      <p class="booking-id">Booking {{ booking.pk }}</p>
+    </div>
+    <a class="button button-secondary" href="{% url 'drivers:booking' booking.pk %}">Back to assignment</a>
+  </header>
+
+  <section class="driver-navigation-summary" aria-label="Journey locations">
+    <article>
+      <h2>Starting point</h2>
+      {% if start_location_available %}
+        <p>Latest recorded ambulance GPS</p>
+        <p class="driver-navigation-time">Updated {{ last_location_update|date:"M j, Y, g:i:s a" }}</p>
+      {% else %}
+        <p class="driver-navigation-warning">No recent valid ambulance GPS location is available.</p>
+        {% if last_location_update %}
+          <p class="driver-navigation-time">Last recorded {{ last_location_update|date:"M j, Y, g:i:s a" }}; not shown as live.</p>
+        {% endif %}
+        <p>Start navigation to request a new, high-accuracy GPS fix. No old coordinate is shown as live.</p>
+      {% endif %}
+    </article>
+    <article>
+      <h2>Patient destination</h2>
+      {% if destination_verified %}
+        <p>{{ booking.location_address }}</p>
+        <p class="driver-navigation-time">Call taker confirmed this location.</p>
+      {% else %}
+        <p class="driver-navigation-warning">Destination not verified. Navigation is blocked; contact the dispatcher.</p>
+      {% endif %}
+    </article>
+  </section>
+
+  {% if destination_verified %}
+    <section class="card driver-gps-controls-panel" aria-label="Navigation controls and GPS status">
+      <div class="driver-gps-controls">
+        <button class="button" type="button" data-gps-start data-start-label="Start Navigation">Start Navigation</button>
+        <button class="button button-secondary" type="button" data-gps-pause hidden>Pause GPS</button>
+        <button class="button button-secondary" type="button" data-gps-stop hidden>Stop GPS sharing</button>
+        <button class="button button-secondary" type="button" data-map-recenter>Recenter map</button>
+        <a
+          class="button button-secondary"
+          href="https://www.google.com/maps/dir/?api=1&amp;destination={{ destination_latitude }},{{ destination_longitude }}&amp;travelmode=driving"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Open external navigation</a>
+      </div>
+      {% include "drivers/_gps_status.html" %}
+      <p class="muted" data-gps-message>GPS sharing is stopped until you start navigation.</p>
+      <form data-gps-csrf hidden>{% csrf_token %}</form>
+    </section>
+
+    <div
+      id="driver-navigation-map"
+      class="driver-navigation-map"
+      data-start-latitude="{{ start_latitude|default_if_none:'' }}"
+      data-start-longitude="{{ start_longitude|default_if_none:'' }}"
+      data-destination-latitude="{{ destination_latitude }}"
+      data-destination-longitude="{{ destination_longitude }}"
+      data-route-available="{{ route_available|yesno:'true,false' }}"
+      data-route-url="https://router.project-osrm.org/route/v1/driving/"
+      aria-label="Live navigation map with ambulance position and confirmed patient destination"
+    ></div>
+    <p id="navigation-map-status" class="driver-navigation-map-status" role="status" aria-live="polite">
+      Loading route information…
+    </p>
+    <section class="card driver-journey-status">
+      <h2>Journey status · {{ booking.get_status_display }}</h2>
+      {% if form.status.field.choices %}
+        <form method="post">
+          {% csrf_token %}
+          {{ form.status.as_hidden }}
+          <button class="button" type="submit">{{ status_action_label }}</button>
+        </form>
+      {% else %}
+        <p class="muted">No further journey status changes are available.</p>
+      {% endif %}
+      <h3>Journey history</h3>
+      {% if assignment_history or booking.status_history.all %}
+        <ol class="driver-journey-timeline">
+          {% for assignment in assignment_history %}
+            <li>
+              <strong>Assigned to {{ assignment.ambulance.vehicle_number }}</strong>
+              · {{ assignment.assigned_at|date:"M j, Y, g:i:s a" }}
+              {% if assignment.released_at %} · released {{ assignment.released_at|date:"M j, Y, g:i:s a" }}{% endif %}
+            </li>
+          {% endfor %}
+          {% for event in booking.status_history.all %}
+            <li><strong>{{ event.get_new_status_display }}</strong> · {{ event.changed_at|date:"M j, Y, g:i:s a" }}</li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="muted">No journey history is available.</p>
+      {% endif %}
+    </section>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+{% if destination_verified %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{% static 'js/gps_tracking.js' %}" defer></script>
+<script src="{% static 'js/driver-navigation.js' %}" defer></script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Patient registration · Ambulance Dispatch{% endblock %}
+{% block content %}
+<section class="form-card narrow">
+  <p class="eyebrow">Patient portal</p>
+  <h1>Create a patient account</h1>
+  <p class="muted">Your profile and bookings are saved securely in the application database.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="error-list">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}
+      <div class="field">
+        {{ field.label_tag }}
+        {{ field }}
+        {{ field.errors }}
+      </div>
+    {% endfor %}
+    <button class="button" type="submit">Create account</button>
+  </form>
+  <p class="muted">Already registered? <a href="{% url 'accounts:patient_login' %}">Patient login</a></p>
+</section>
+{% endblock %}

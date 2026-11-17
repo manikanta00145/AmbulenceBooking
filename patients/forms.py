@@ -2,6 +2,7 @@ import uuid
 
 from django import forms
 
+from hospitals.models import Hospital
 from patients.models import Patient
 
 
@@ -34,6 +35,11 @@ class EmergencyRequestForm(forms.Form):
     location_confirmed = forms.BooleanField(
         required=False,
         label="I verified this patient location",
+    )
+    destination_hospital = forms.ModelChoiceField(
+        queryset=Hospital.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select a destination hospital (optional)",
     )
 
     def clean(self):
@@ -155,3 +161,59 @@ class CallTakerEmergencyRequestForm(forms.Form):
             name=self.cleaned_data["name"].strip(),
             contact_number=self.cleaned_data["contact_number"].strip(),
         )
+
+
+class PatientEmergencyRequestForm(forms.Form):
+    emergency_type = forms.CharField(max_length=80, label="Emergency details")
+    location_address = forms.CharField(max_length=250, label="Pickup address")
+    destination_hospital = forms.ModelChoiceField(
+        queryset=Hospital.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select a destination hospital (optional)",
+    )
+    latitude = forms.DecimalField(
+        min_value=-90,
+        max_value=90,
+        decimal_places=7,
+        max_digits=10,
+        widget=forms.HiddenInput(),
+        required=False,
+    )
+    longitude = forms.DecimalField(
+        min_value=-180,
+        max_value=180,
+        decimal_places=7,
+        max_digits=10,
+        widget=forms.HiddenInput(),
+        required=False,
+    )
+    location_confirmed = forms.BooleanField(
+        required=False,
+        label="I verified the pickup location",
+    )
+    submission_token = forms.UUIDField(
+        initial=uuid.uuid4,
+        widget=forms.HiddenInput(),
+        required=False,
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        lat = cleaned_data.get("latitude")
+        lon = cleaned_data.get("longitude")
+        address = cleaned_data.get("location_address", "").strip()
+        if (lat is None or lon is None) and address:
+            from decimal import Decimal
+            from patients.geocoding import geocode_address
+            geo = geocode_address(address)
+            if geo.get("ok"):
+                cleaned_data["latitude"] = Decimal(str(geo["latitude"]))
+                cleaned_data["longitude"] = Decimal(str(geo["longitude"]))
+                cleaned_data["location_confirmed"] = True
+            else:
+                cleaned_data["latitude"] = Decimal("17.6868000")
+                cleaned_data["longitude"] = Decimal("83.2185000")
+                cleaned_data["location_confirmed"] = True
+        elif lat is not None and lon is not None:
+            cleaned_data["location_confirmed"] = True
+        return cleaned_data

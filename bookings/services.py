@@ -3,8 +3,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from ambulances.models import Ambulance
-from ambulances.services import GPS_MAX_AGE, publish_ambulance_update
+from ambulances.services import is_gps_fresh, publish_ambulance_update
 from bookings.models import AmbulanceAssignment, Booking, BookingStatusHistory
+from notifications.services import notify_users
 
 
 @transaction.atomic
@@ -32,7 +33,7 @@ def assign_ambulance(*, booking_id, ambulance_id, dispatcher):
         raise ValidationError("The selected ambulance is no longer available.")
     if ambulance.latitude is None or ambulance.longitude is None:
         raise ValidationError("The selected ambulance has no GPS coordinates.")
-    if ambulance.location_updated_at < timezone.now() - GPS_MAX_AGE:
+    if not is_gps_fresh(ambulance):
         raise ValidationError("The selected ambulance GPS location is stale.")
     if (
         not ambulance.driver.user.is_active
@@ -60,6 +61,16 @@ def assign_ambulance(*, booking_id, ambulance_id, dispatcher):
         new_status=booking.status,
         changed_by=dispatcher,
     )
+    notify_users(
+        users=(
+            booking.created_by,
+            booking.patient.user,
+            ambulance.driver.user,
+        ),
+        title="Ambulance assigned",
+        message=f"{ambulance.vehicle_number} was assigned to booking {booking.pk}.",
+        booking=booking,
+    )
     return booking
 
 
@@ -78,6 +89,21 @@ def record_status_change(*, booking, new_status, actor, note=""):
         new_status=new_status,
         changed_by=actor,
         note=note,
+    )
+    assigned_driver = (
+        locked_booking.assigned_ambulance.driver.user
+        if locked_booking.assigned_ambulance_id
+        else None
+    )
+    notify_users(
+        users=(
+            locked_booking.created_by,
+            locked_booking.patient.user,
+            assigned_driver,
+        ),
+        title="Booking status updated",
+        message=f"Booking {locked_booking.pk} is now {new_status}.",
+        booking=locked_booking,
     )
     if new_status in {Booking.Status.COMPLETED, Booking.Status.CANCELLED}:
         active_assignment = AmbulanceAssignment.objects.select_for_update().filter(

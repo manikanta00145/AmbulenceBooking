@@ -5,17 +5,19 @@ A Django academic/demo application for call takers, a single dispatcher, and amb
 > This is not a replacement for a functioning emergency helpline. Do not rely on it for real emergency response without substantial operational, security, availability, and safety engineering.
 
 For Docker Desktop setup on Windows 11, see [DOCKER_SETUP.md](./DOCKER_SETUP.md).
+For local MySQL Server setup, see [MYSQL_SETUP.md](./MYSQL_SETUP.md).
 
 ## Local setup
 
-Requires Python 3.10+, pip, and the database selected by `DB_ENGINE`. The supplied `.env.example` uses SQLite; MySQL 8.0.16+ is supported when `DB_ENGINE=mysql`.
+Requires Python 3.10+, pip, and MySQL 8.0. Django is configured to use MySQL only.
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-Copy-Item .env.example .env
-python manage.py migrate
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# Set the local MySQL credentials in .env before setup.
+python setup_mysql.py
 python manage.py createsuperuser
 python manage.py runserver
 ```
@@ -43,27 +45,32 @@ Remove-Item Env:AUTOBAHN_USE_NVX
 - The database enforces at most one dispatcher account. If a dispatcher account already exists, another dispatcher registration is rejected; manage the existing account in admin.
 - Driver profiles are created for driver-role accounts. Once approved, the dispatcher can register ambulances against active driver accounts.
 
-## Optional MySQL setup
+## MySQL database
 
-Use this section only when configuring `DB_ENGINE=mysql`.
-
-Install MySQL and the Python dependencies. Create the database and an application account in MySQL:
-
-```sql
-CREATE DATABASE ambulance_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'ambulance_app'@'localhost' IDENTIFIED BY 'use-a-unique-password';
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES
-  ON ambulance_db.* TO 'ambulance_app'@'localhost';
-```
-
-Set the connection values in `.env` (the template is `.env.example`), then apply migrations. In particular, account migration `0004_user_employee_id` must be applied before registration queries `users.employee_id`; the approval fields are added by `0007_user_approval_status_and_audit`.
+MySQL 8.0 is the default database. For a local MySQL Server, set `DB_USER=root`, `DB_PASSWORD`, `DB_HOST=localhost`, and `DB_PORT=3306` in `.env`, then run `python setup_mysql.py`. For Docker Compose, set unique `MYSQL_APP_PASSWORD` and `MYSQL_ROOT_PASSWORD` values; the container uses a dedicated `ambulance_app` account and Docker-managed schema/data.
 
 ```powershell
-python manage.py migrate
-python manage.py check --database default
+# Local MySQL Server:
+python setup_mysql.py
+
+# Or start Docker Compose and migrate from inside the app container:
+docker compose up -d
+docker compose exec web python manage.py migrate
 ```
 
-The MySQL account needs database creation/drop privileges only if you intend to run Django's tests using MySQL's separate test database; use a distinct developer/test account for that. Keep credentials out of source control.
+Session data is stored server-side in MySQL (`django_session`); the browser cookie
+contains only the session key. Run migrations to create the session table. Session
+cookies are HttpOnly and SameSite=Lax; Secure is enabled by default when
+`DJANGO_DEBUG` is false and can be overridden with `SESSION_COOKIE_SECURE`.
+`CSRF_COOKIE_SECURE` follows the same default.
+
+Run automated tests against the configured MySQL server. The MySQL account needs privileges to create and drop Django's test database:
+
+```powershell
+python manage.py test
+```
+
+Keep database credentials out of source control. The local MySQL account needs database creation/drop privileges only if you intend to run Django's tests against MySQL's separate test database.
 
 To confirm the configured connection and tables:
 
@@ -95,8 +102,9 @@ In MySQL Workbench, connect to the local server, refresh **Schemas**, expand `am
 
 1. A call taker records caller/patient details and searches the pickup address using the OpenStreetMap Nominatim search service. The returned point is only a suggestion: the call taker must review it, adjust the draggable/clickable Leaflet pin if needed, and explicitly confirm the location before saving.
 2. The dispatcher reviews confirmed patient markers and assigns an available ambulance with a fresh GPS fix (five minutes or newer). Requests without confirmed coordinates cannot be assigned. The nearest eligible vehicle is highlighted using straight-line Haversine distance.
-3. The assigned driver accepts, travels, arrives, records pickup, and completes the booking.
-4. While the driver dashboard is open and GPS permission is granted, browser coordinates are sent to the server and broadcast to dispatcher dashboards over Django Channels. A 30-second HTTP refresh is retained as a fallback.
+3. The driver accepts the assignment, then opens the booking's live navigation page. GPS sharing starts only after the driver selects **Start Navigation** and grants browser location permission. The page shows the ambulance, confirmed patient destination, OSRM road route, GPS accuracy/freshness, and remaining route estimate. Drivers can pause, resume, or stop GPS sharing.
+4. GPS fixes are sent to `POST /drivers/location/` with CSRF protection, accuracy, and the browser fix timestamp. The server rejects invalid/stale fixes, rate-limits history writes, updates the ambulance's latest location, records `GPSLocation` history, and broadcasts updates to authenticated dispatchers through Channels. Dispatcher polling every five seconds remains as a fallback.
+5. The driver starts the journey, marks arrival, records pickup, and completes the booking. Arrival is checked on the server against the active assignment, confirmed destination, fresh GPS, measured accuracy, and configured distance threshold. Status transitions remain in `BookingStatusHistory`.
 
 Assignments and status transitions are recorded. Assignment operations use database transactions and row locks; production concurrency behavior depends on a database with effective row locking (such as MySQL or PostgreSQL), not SQLite.
 
@@ -108,13 +116,15 @@ The default user agent is `AmbulenceBooking/1.0 (Django emergency dispatch appli
 
 The existing `bookings` table already stores coordinates in `patient_latitude` and `patient_longitude`. New migrations add the confirmation/idempotency metadata and geocoding cache/rate-limit tables without removing booking or patient records. Existing bookings keep their coordinate values, but are unconfirmed by default and cannot be dispatched until their location has been verified.
 
-For a manual end-to-end check, enter `PM Palem, Last Bus Stop, Visakhapatnam, Andhra Pradesh, India` in the call-taker portal, choose **Find location**, inspect and adjust the pin, check the confirmation box, and submit. Confirm the saved values in the MySQL `bookings` table and the active emergency marker/popup in the dispatcher dashboard. The driver assignment page receives the same confirmed point through its booking data and provides an OpenStreetMap navigation link.
+For a manual end-to-end check, enter `PM Palem, Last Bus Stop, Visakhapatnam, Andhra Pradesh, India` in the call-taker portal, choose **Find location**, inspect and adjust the pin, check the confirmation box, and submit. Confirm the saved values in MySQL and the emergency marker/popup in the dispatcher dashboard. The assigned driver can open live navigation from the booking page; only a confirmed destination is used, and a stale ambulance position is never displayed as live. Start GPS sharing explicitly to move the ambulance marker and update the dispatcher's map. OSRM route requests are limited to significant movement or a time interval; the displayed estimate is not traffic-aware. If OSRM fails, the driver page labels its straight-line fallback clearly and does not show a fallback ETA.
 
 The local default channel layer is in-memory and works for a single development process. Configure `REDIS_URL` to use Redis with `channels_redis` in a multi-worker deployment.
 
 ## GPS and deployment notes
 
-Browser geolocation requires user permission and a secure context (HTTPS in production; localhost is allowed for development). Map tiles and Leaflet are loaded from third-party services. Protect patient data, configure HTTPS and secure cookies, rotate `DJANGO_SECRET_KEY`, configure allowed hosts, backups, monitoring, and operational procedures before any real deployment.
+Browser geolocation requires user permission and a secure context (HTTPS in production; localhost is allowed for development). Maps use Esri World Street Map tiles with service attribution; the public tile endpoint does not require an API key, but it does require internet access and is subject to Esri's terms and availability. Leaflet is loaded from a third-party CDN. Protect patient data, configure HTTPS and secure cookies, rotate `DJANGO_SECRET_KEY`, configure allowed hosts, backups, monitoring, and operational procedures before any real deployment.
+
+Driver GPS write limits and arrival validation can be adjusted with `DRIVER_GPS_MIN_INTERVAL_SECONDS`, `DRIVER_GPS_MIN_MOVEMENT_METERS`, `DRIVER_GPS_HEARTBEAT_SECONDS`, `DRIVER_ARRIVAL_RADIUS_METERS`, and `DRIVER_ARRIVAL_MAX_ACCURACY_METERS` in `.env`. The additive `ambulances.0004` migration adds nullable GPS accuracy fields without deleting location or booking data. Back up the target MySQL database and review migration state before applying it.
 
 ## Checks
 

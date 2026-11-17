@@ -94,9 +94,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return false;
     }
     locationMap = window.L.map(locationMapElement).setView([17.6868, 83.2185], 12);
-    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    window.L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors",
+      attribution: 'Sources: <a href="https://goto.arcgisonline.com/maps/World_Street_Map">Esri</a>, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand), NGCC, &copy; OpenStreetMap contributors, and the GIS User Community',
     }).addTo(locationMap);
     locationMap.on("click", (event) => {
       setPatientLocation(

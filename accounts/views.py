@@ -11,6 +11,7 @@ from accounts.forms import (
     DispatcherRegistrationForm,
     DriverRegistrationForm,
     LoginForm,
+    PatientRegistrationForm,
 )
 from accounts.models import User
 from accounts.otp import (
@@ -20,6 +21,7 @@ from accounts.otp import (
 )
 from ambulances.models import Ambulance
 from drivers.models import Driver
+from patients.models import Patient
 
 
 class AccountLoginView(LoginView):
@@ -84,6 +86,54 @@ class DriverLoginView(PortalLoginView):
     registration_url_name = "drivers:register"
     login_url_name = "drivers:login"
     portal_role_label = "DRIVER"
+
+
+class PatientLoginView(PortalLoginView):
+    portal_role = User.Role.PATIENT
+    portal_title = "Patient"
+    dashboard_url_name = "patients:dashboard"
+    registration_url_name = "accounts:patient_register"
+    login_url_name = "accounts:patient_login"
+    portal_role_label = "PATIENT"
+
+
+class PatientRegistrationView(FormView):
+    template_name = "accounts/patient_register.html"
+    form_class = PatientRegistrationForm
+
+    def form_valid(self, form):
+        try:
+            with transaction.atomic():
+                user = form.save()
+                Patient.objects.create(
+                    user=user,
+                    name=form.cleaned_data["full_name"],
+                    email=form.cleaned_data["email"],
+                    contact_number=form.cleaned_data["phone_number"],
+                    age=form.cleaned_data["age"],
+                    gender=form.cleaned_data["gender"],
+                    address=form.cleaned_data["address"],
+                    emergency_contact=form.cleaned_data["emergency_contact"],
+                )
+        except IntegrityError:
+            form.add_error(
+                None,
+                "The account could not be created because one of these details "
+                "was registered at the same time. Review your email and mobile number.",
+            )
+            return self.form_invalid(form)
+
+        messages.success(self.request, "Patient account created. You can now sign in.")
+        return render(
+            self.request,
+            "accounts/registration_success.html",
+            {
+                "portal_title": "Patient",
+                "portal_role_label": "PATIENT",
+                "redirect_url": reverse("accounts:patient_login"),
+                "approval_required": False,
+            },
+        )
 
 
 class PortalRegistrationView(FormView):
@@ -176,6 +226,7 @@ class PortalRegistrationView(FormView):
                 "portal_title": self.portal_title,
                 "portal_role_label": self.portal_role_label,
                 "redirect_url": reverse(self.login_url_name),
+                "approval_required": True,
             },
         )
 
@@ -216,10 +267,19 @@ class DriverRegistrationView(PortalRegistrationView):
     success_message = "Driver account created successfully! Please wait for administrator approval."
 
 
+def logout_view(request):
+    from django.contrib.auth import logout as auth_logout
+    auth_logout(request)
+    messages.info(request, "You have been logged out.")
+    return redirect("home")
+
+
 @login_required
 def dashboard(request):
     if request.user.role == request.user.Role.DISPATCHER:
         return redirect("dispatcher:dashboard")
     if request.user.role == request.user.Role.DRIVER:
         return redirect("drivers:dashboard")
+    if request.user.role == request.user.Role.PATIENT:
+        return redirect("patients:dashboard")
     return redirect("home")

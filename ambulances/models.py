@@ -15,10 +15,19 @@ class Ambulance(models.Model):
         UNAVAILABLE = "Unavailable", "Unavailable"
 
     vehicle_number = models.CharField(max_length=20, unique=True)
+    vehicle_type = models.CharField(max_length=60, blank=True)
+    vehicle_model = models.CharField(max_length=100, blank=True)
     driver = models.OneToOneField(
         "drivers.Driver",
         on_delete=models.PROTECT,
         related_name="ambulance",
+    )
+    hospital = models.ForeignKey(
+        "hospitals.Hospital",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ambulances",
     )
     latitude = models.DecimalField(
         max_digits=10,
@@ -38,6 +47,13 @@ class Ambulance(models.Model):
         default=timezone.now,
         db_index=True,
         db_column="last_location_update",
+    )
+    location_accuracy_meters = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100000)],
     )
     patient_status = models.CharField(
         max_length=3,
@@ -70,6 +86,13 @@ class GPSLocation(models.Model):
         max_digits=10,
         decimal_places=7,
         validators=[MinValueValidator(-180), MaxValueValidator(180)],
+    )
+    accuracy_meters = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100000)],
     )
     recorded_at = models.DateTimeField(auto_now_add=True, db_index=True)
 

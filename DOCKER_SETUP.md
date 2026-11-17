@@ -2,11 +2,11 @@
 
 ## Project configuration and data safety
 
-This project currently selects SQLite through `DB_ENGINE=sqlite3` in `.env`, and its existing database is `db.sqlite3`. The Compose setup therefore runs Django only and bind-mounts the project directory into the container. The database, uploaded media, and source files remain on the Windows host and survive container rebuilds and restarts. No MySQL container or MySQL-to-SQLite conversion is performed.
+Docker Compose runs Django and MySQL 8.0. MySQL persists in the named `mysql_data` volume; the project schema is created by Django migrations, not by a checked-in SQL file. The database is published on `127.0.0.1:3307` for local tools; the web container connects privately to `db:3306`.
 
-The project also supports MySQL through its existing `DB_ENGINE` setting, but changing this setup to MySQL requires an intentional database migration and data transfer. Do not switch `DB_ENGINE` or point it at another database until you have a verified backup and have planned that transfer.
-
-Migrations are not run automatically during startup. Apply them manually only after the web container is running and SQLite is available.
+This setup initializes a MySQL database; it does not import historical data.
+The former SQLite source and its external backup were deleted before import,
+so no SQLite records are present in MySQL or available in this checkout.
 
 ## Prerequisites
 
@@ -35,7 +35,7 @@ From the project root in the VS Code PowerShell terminal, create a local environ
 if (-not (Test-Path .\.env)) { Copy-Item .\.env.example .\.env }
 ```
 
-Keep `.env` private and out of source control. The supplied example is configured for the current SQLite database; set a unique `DJANGO_SECRET_KEY` for your local environment. For local development, `DJANGO_DEBUG=True` is expected.
+Keep `.env` private and out of source control. Set unique values for `DJANGO_SECRET_KEY`, `MYSQL_APP_PASSWORD`, and `MYSQL_ROOT_PASSWORD`; do not use the example passwords as real credentials. `DJANGO_DEBUG=True` is for local development. Docker Compose uses its dedicated `MYSQL_APP_USER`/`MYSQL_APP_PASSWORD` account and does not use the local-server `DB_USER`/`DB_PASSWORD` values.
 
 ## Build and start
 
@@ -43,27 +43,29 @@ Keep `.env` private and out of source control. The supplied example is configure
 docker compose build
 docker compose up -d
 docker compose ps
-docker compose logs -f
+docker compose logs --tail 100 db web
 ```
 
-Open <http://127.0.0.1:8000/>. Django Admin is at <http://127.0.0.1:8000/admin/>.
+Wait for `db` to report healthy, then apply migrations:
 
-The `web` service uses the Python 3.12 image, installs `requirements.txt`, and runs Django's development server on port 8000. `docker-compose.yml` mounts the current project at `/app`, so the existing `db.sqlite3` is the database used inside the container. `restart: unless-stopped` restarts the app container after a Docker daemon restart unless it was explicitly stopped.
+```powershell
+docker compose exec web python manage.py migrate
+```
 
-There is no MySQL service or named MySQL volume because the active project configuration uses SQLite. The host bind mount is the persistence mechanism for this setup. Do not run multiple app instances against this SQLite file.
+Open <http://127.0.0.1:8000/>. Django Admin is at <http://127.0.0.1:8000/admin/>. The `web` service bind-mounts the project at `/app`; the MySQL data itself is stored in the Docker-managed `mysql_data` volume and survives container rebuilds/restarts.
 
 ## Common operations
 
 Run these commands from the VS Code PowerShell terminal at the project root:
 
 ```powershell
-# Apply existing migrations; this does not create new migration files.
+# Apply migrations to the MySQL database.
 docker compose exec web python manage.py migrate
 
 # Create an administrative user.
 docker compose exec web python manage.py createsuperuser
 
-# Stop and remove the app container (the host database is not removed).
+# Stop and remove containers (the MySQL volume remains).
 docker compose down
 
 # Restart the app container.
@@ -77,7 +79,7 @@ docker compose exec web sh
 docker compose logs --tail 100 web
 ```
 
-The database is SQLite inside the application container, not a MySQL server. To inspect the Django database configuration, run:
+To inspect the Django database configuration, run:
 
 ```powershell
 docker compose exec web python manage.py check --database default
@@ -96,30 +98,15 @@ docker compose run --rm --service-ports web daphne -b 0.0.0.0 -p 8000 ambulance_
 
 Before any production deployment, set `DJANGO_DEBUG=False`, configure `DJANGO_ALLOWED_HOSTS` and a production-only secret in `.env`, and arrange HTTPS plus production static/media hosting. Do not expose the development server to the public internet.
 
-## Back up and restore SQLite data
+## Existing data status
 
-Stop the app before copying the SQLite database so that the backup is consistent. These commands store backups under your Windows profile rather than in the repository:
+The former SQLite database and backup were removed before migration. No
+records were imported, and no SQLite import procedure is available in this
+MySQL-only configuration. Recovering those records requires restoring another
+copy of the source database before planning a migration. Do not treat
+`migrate` as a data import; it creates the schema only.
 
-```powershell
-docker compose stop web
-$backupDir = Join-Path $env:USERPROFILE "AmbulenceBooking-backups"
-New-Item -ItemType Directory -Force $backupDir | Out-Null
-$backupFile = Join-Path $backupDir ("db-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".sqlite3")
-Copy-Item .\db.sqlite3 $backupFile
-docker compose start web
-```
-
-To restore, stop the app, select the intended backup, and first preserve the current database. The example uses a specific backup filename; replace it with the file you intend to restore:
-
-```powershell
-docker compose stop web
-$backupFile = Join-Path $env:USERPROFILE "AmbulenceBooking-backups\db-YYYYMMDD-HHMMSS.sqlite3"
-Copy-Item .\db.sqlite3 (Join-Path $env:USERPROFILE "AmbulenceBooking-backups\db-before-restore.sqlite3")
-Copy-Item $backupFile .\db.sqlite3 -Force
-docker compose start web
-```
-
-Never delete or replace `db.sqlite3` unless you have verified the backup and explicitly intend to restore it. `docker compose down` does not delete this host file.
+Do not use `docker compose down -v` unless you explicitly intend to destroy the MySQL database volume.
 
 ## Troubleshooting
 
@@ -127,6 +114,6 @@ Never delete or replace `db.sqlite3` unless you have verified the backup and exp
 - **Docker daemon is unavailable:** Start Docker Desktop and check its status. If using WSL 2, verify WSL integration is enabled for the selected distribution.
 - **`.env` is missing:** Run the environment preparation command above. Do not copy the example over an existing `.env`.
 - **Port 8000 is in use:** Stop the other process or change the host side of the `ports` mapping in `docker-compose.yml`, then open the corresponding port in the browser.
-- **Database errors:** Confirm `.env` has `DB_ENGINE=sqlite3` and `DB_NAME=db.sqlite3`, and that `db.sqlite3` exists at the project root. Do not point the app at a different database or remove the file as a troubleshooting shortcut.
+- **Database connection errors:** Check that `db` is healthy, `MYSQL_APP_PASSWORD` and `MYSQL_ROOT_PASSWORD` were set before the MySQL volume was first created, and that port 3307 is available. If credentials are changed after the volume is initialized, update the MySQL users inside that database; changing `.env` alone does not reset credentials stored in the volume.
 - **Static files look stale:** Ensure `DJANGO_DEBUG=True` for development and restart the app after changing settings.
 - **See detailed application output:** Run `docker compose logs -f web`.

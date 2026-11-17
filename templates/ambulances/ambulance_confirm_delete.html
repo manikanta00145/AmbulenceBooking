@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Delete Ambulance {{ ambulance.vehicle_number }} · Ambulance Dispatch{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Fleet Management</p>
+  <h1>Confirm Deletion</h1>
+</section>
+<section class="card narrow">
+  <h2>Delete Ambulance {{ ambulance.vehicle_number }}?</h2>
+  <p>Are you sure you want to permanently delete vehicle <strong>{{ ambulance.vehicle_number }}</strong>? This action cannot be undone.</p>
+  <form method="post">
+    {% csrf_token %}
+    <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+      <button class="button danger" type="submit" style="background:#dc2626;color:white;padding:0.6rem 1.2rem;border-radius:4px;border:none;cursor:pointer;">Confirm Delete</button>
+      <a href="{% url 'dispatcher:ambulances' %}" class="button secondary" style="padding:0.6rem 1.2rem;text-decoration:none;">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

@@ -11,6 +11,7 @@ def role_required(*roles):
         ("CALL_TAKER",): "accounts:call_taker_login",
         ("DISPATCHER",): "accounts:dispatcher_login",
         ("DRIVER",): "drivers:login",
+        ("PATIENT",): "accounts:patient_login",
     }
     login_url = portal_logins.get(tuple(roles))
 

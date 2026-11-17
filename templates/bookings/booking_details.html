@@ -25,6 +25,7 @@
     <dl>
       <dt>Emergency type</dt><dd>{{ booking.emergency_type }}</dd>
       <dt>Pickup address</dt><dd>{{ booking.location_address }}</dd>
+      <dt>Destination hospital</dt><dd>{{ booking.destination_hospital|default:"Not selected" }}</dd>
       <dt>Status</dt><dd><span class="status">{{ booking.get_status_display }}</span></dd>
       <dt>Requested</dt><dd>{{ booking.requested_at|date:"M j, Y H:i" }}</dd>
       <dt>Ambulance</dt><dd>{{ booking.assigned_ambulance|default:"Not assigned yet" }}</dd>

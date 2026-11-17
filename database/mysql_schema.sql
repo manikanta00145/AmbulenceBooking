@@ -1,0 +1,3 @@
+-- Django migrations are the source of truth for this application's schema.
+-- Do not duplicate model CREATE TABLE statements here.
+-- After creating ambulance_db, run `python manage.py migrate`.

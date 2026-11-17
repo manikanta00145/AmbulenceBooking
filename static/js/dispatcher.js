@@ -15,9 +15,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const map = L.map(mapElement).setView([17.6868, 83.2185], 11);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
     maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
+    attribution: 'Sources: <a href="https://goto.arcgisonline.com/maps/World_Street_Map">Esri</a>, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand), NGCC, &copy; OpenStreetMap contributors, and the GIS User Community',
   }).addTo(map);
 
   const ambulanceMarkers = new Map();
@@ -28,6 +28,11 @@ document.addEventListener("DOMContentLoaded", () => {
   let routeLayer = null;
   let routeKey = "";
   let routeRequestId = 0;
+  let routeOrigin = null;
+  let routeGeometry = null;
+  let routeDistanceMeters = 0;
+  let routeDurationSeconds = 0;
+  let lastRouteRequestAt = 0;
 
   const formatDate = (value) => {
     if (!value) return "No GPS update";
@@ -42,7 +47,24 @@ document.addEventListener("DOMContentLoaded", () => {
     && longitude !== undefined
     && Number.isFinite(Number(latitude))
     && Number.isFinite(Number(longitude))
+    && Number(latitude) >= -90
+    && Number(latitude) <= 90
+    && Number(longitude) >= -180
+    && Number(longitude) <= 180
   );
+
+  const distanceMeters = (left, right) => {
+    if (!left || !right) return Infinity;
+    const radians = (degrees) => degrees * Math.PI / 180;
+    const latitudeDelta = radians(right.latitude - left.latitude);
+    const longitudeDelta = radians(right.longitude - left.longitude);
+    const firstLatitude = radians(left.latitude);
+    const secondLatitude = radians(right.latitude);
+    const value = Math.sin(latitudeDelta / 2) ** 2
+      + Math.cos(firstLatitude) * Math.cos(secondLatitude)
+      * Math.sin(longitudeDelta / 2) ** 2;
+    return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+  };
 
   const appendDetail = (list, label, value, className = "") => {
     const term = document.createElement("dt");
@@ -118,9 +140,11 @@ document.addEventListener("DOMContentLoaded", () => {
       ["Availability", location.availability],
       ["Patient status", location.patient_status],
       ["Coordinates", `${Number(location.latitude).toFixed(5)}, ${Number(location.longitude).toFixed(5)}`],
+      ["GPS accuracy", location.accuracy_meters == null ? "Not available" : `±${Number(location.accuracy_meters).toFixed(0)} m`],
       ["Last GPS update", formatDate(location.updated_at)],
       ["GPS", location.gps_stale ? "Stale / offline" : "Current"],
       ["Active emergency", activeBooking ? activeBooking.id : "None"],
+      ["Journey status", location.booking_status || "No active booking"],
     ]));
   };
 
@@ -234,6 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
     appendDetail(detailList, "Patients", String(booking.number_of_patients));
     appendDetail(detailList, "Requested", formatDate(booking.requested_at));
     appendDetail(detailList, "Status", booking.status);
+    appendDetail(detailList, "Driver status", booking.booking_status || booking.status);
     appendDetail(detailList, "Ambulance", booking.ambulance || "Unassigned");
     appendDetail(detailList, "Driver", booking.driver || "Not assigned");
     appendDetail(detailList, "Driver contact", booking.driver_phone || "Not available");
@@ -250,6 +275,13 @@ document.addEventListener("DOMContentLoaded", () => {
       booking.last_location_update ? formatDate(booking.last_location_update) : "No assigned ambulance",
       `gps-state${booking.gps_stale ? " is-stale" : " is-fresh"}`,
     );
+    appendDetail(
+      detailList,
+      "GPS accuracy",
+      booking.gps_accuracy_meters == null
+        ? "Not available"
+        : `±${Number(booking.gps_accuracy_meters).toFixed(0)} m`,
+    );
     if (booking.suggested_ambulance) {
       appendDetail(
         detailList,
@@ -261,16 +293,73 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const removeRoute = () => {
+    routeRequestId += 1;
     if (routeLayer) {
       map.removeLayer(routeLayer);
       routeLayer = null;
     }
     routeKey = "";
+    routeOrigin = null;
+    routeGeometry = null;
+  };
+
+  const remainingRouteDistance = (coordinates, point) => {
+    if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+    const points = coordinates.map(([longitude, latitude]) => ({ latitude, longitude }));
+    let nearestSegment = 0;
+    let nearestFraction = 0;
+    let nearestDistanceSquared = Infinity;
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const first = points[index];
+      const second = points[index + 1];
+      const scale = Math.cos((point.latitude + first.latitude + second.latitude) / 3 * Math.PI / 180);
+      const firstX = first.longitude * scale;
+      const deltaX = (second.longitude - first.longitude) * scale;
+      const deltaY = second.latitude - first.latitude;
+      const lengthSquared = deltaX * deltaX + deltaY * deltaY;
+      const fraction = lengthSquared === 0
+        ? 0
+        : Math.max(0, Math.min(1, (
+          (point.longitude * scale - firstX) * deltaX
+          + (point.latitude - first.latitude) * deltaY
+        ) / lengthSquared));
+      const offsetX = point.longitude * scale - (firstX + fraction * deltaX);
+      const offsetY = point.latitude - (first.latitude + fraction * deltaY);
+      const distanceSquared = offsetX * offsetX + offsetY * offsetY;
+      if (distanceSquared < nearestDistanceSquared) {
+        nearestDistanceSquared = distanceSquared;
+        nearestSegment = index;
+        nearestFraction = fraction;
+      }
+    }
+
+    const interpolate = (first, second, fraction) => ({
+      latitude: first.latitude + (second.latitude - first.latitude) * fraction,
+      longitude: first.longitude + (second.longitude - first.longitude) * fraction,
+    });
+    const distance = (first, second) => {
+      const radians = (degrees) => degrees * Math.PI / 180;
+      const latitudeDelta = radians(second.latitude - first.latitude);
+      const longitudeDelta = radians(second.longitude - first.longitude);
+      const firstLatitude = radians(first.latitude);
+      const secondLatitude = radians(second.latitude);
+      const value = Math.sin(latitudeDelta / 2) ** 2
+        + Math.cos(firstLatitude) * Math.cos(secondLatitude)
+        * Math.sin(longitudeDelta / 2) ** 2;
+      return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+    };
+    let remaining = distance(
+      interpolate(points[nearestSegment], points[nearestSegment + 1], nearestFraction),
+      points[nearestSegment + 1],
+    );
+    for (let index = nearestSegment + 1; index < points.length - 1; index += 1) {
+      remaining += distance(points[index], points[index + 1]);
+    }
+    return remaining;
   };
 
   const routeForSelection = async (force = false) => {
     const booking = emergencies.find((item) => item.id === selectedBookingId);
-    const requestId = ++routeRequestId;
     if (!booking) {
       removeRoute();
       routeStatusElement.textContent = "Select an active case to view its route.";
@@ -301,35 +390,111 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const from = [Number(booking.ambulance_latitude), Number(booking.ambulance_longitude)];
     const to = [Number(booking.latitude), Number(booking.longitude)];
-    const key = `${booking.id}:${from.map((value) => value.toFixed(3)).join(",")}:${to.join(",")}`;
-    if (!force && key === routeKey) return;
+    const key = `${booking.id}:${to.join(",")}`;
+    const currentOrigin = { latitude: from[0], longitude: from[1] };
+    if (
+      !force
+      && key === routeKey
+      && routeOrigin
+      && distanceMeters(routeOrigin, currentOrigin) < 250
+      && Date.now() - lastRouteRequestAt < 90000
+    ) {
+      updateRouteProgress(booking);
+      return;
+    }
+    if (key !== routeKey) {
+      if (routeLayer) {
+        map.removeLayer(routeLayer);
+        routeLayer = null;
+      }
+      routeGeometry = null;
+    }
+    const requestId = ++routeRequestId;
     routeKey = key;
+    routeOrigin = currentOrigin;
+    lastRouteRequestAt = Date.now();
     routeStatusElement.textContent = booking.gps_stale
       ? "Driver GPS is stale. Showing route from the last recorded location…"
       : "Loading road route…";
+    const controller = typeof AbortController === "undefined" ? null : new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      if (controller) controller.abort();
+    }, 10000);
 
     try {
       const url = `${routeUrl}${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson&steps=false`;
-      const response = await fetch(url, { headers: { Accept: "application/json" } });
+      const requestOptions = { headers: { Accept: "application/json" } };
+      if (controller) requestOptions.signal = controller.signal;
+      const response = await fetch(url, requestOptions);
       if (!response.ok) throw new Error(`Routing service returned ${response.status}.`);
       const data = await response.json();
       if (requestId !== routeRequestId) return;
       if (data.code !== "Ok" || !data.routes || !data.routes.length) {
         throw new Error(data.message || "No road route was returned.");
       }
+      const route = data.routes[0];
+      if (
+        !route.geometry
+        || route.geometry.type !== "LineString"
+        || !Array.isArray(route.geometry.coordinates)
+        || route.geometry.coordinates.length < 2
+        || !route.geometry.coordinates.every((coordinate) => (
+          Array.isArray(coordinate)
+          && Number.isFinite(Number(coordinate[0]))
+          && Number.isFinite(Number(coordinate[1]))
+          && Number(coordinate[0]) >= -180
+          && Number(coordinate[0]) <= 180
+          && Number(coordinate[1]) >= -90
+          && Number(coordinate[1]) <= 90
+        ))
+        || !Number.isFinite(Number(route.distance))
+        || Number(route.distance) <= 0
+        || !Number.isFinite(Number(route.duration))
+        || Number(route.duration) < 0
+      ) {
+        throw new Error("The routing service returned invalid route data.");
+      }
       if (routeLayer) map.removeLayer(routeLayer);
-      routeLayer = L.geoJSON(data.routes[0].geometry, {
+      routeLayer = L.geoJSON(route.geometry, {
         style: { color: "#1769aa", weight: 5, opacity: .82 },
       }).addTo(map);
-      const distanceKm = (data.routes[0].distance / 1000).toFixed(1);
-      const minutes = Math.round(data.routes[0].duration / 60);
-      routeStatusElement.textContent =
-        `Road route: ${distanceKm} km · about ${minutes} min via OSRM${booking.gps_stale ? " (last known GPS)" : ""}.`;
+      routeGeometry = route.geometry.coordinates;
+      routeDistanceMeters = Number(route.distance);
+      routeDurationSeconds = Number(route.duration);
+      updateRouteProgress(booking);
     } catch (error) {
       if (requestId !== routeRequestId) return;
-      removeRoute();
+      if (routeLayer) {
+        map.removeLayer(routeLayer);
+        routeLayer = null;
+      }
+      routeGeometry = null;
+      routeOrigin = currentOrigin;
+      lastRouteRequestAt = Date.now();
       routeStatusElement.textContent = `Route unavailable: ${error.message}`;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
+  };
+
+  const updateRouteProgress = (booking) => {
+    if (!routeGeometry || !hasCoordinates(booking.ambulance_latitude, booking.ambulance_longitude)) {
+      return;
+    }
+    const remainingMeters = remainingRouteDistance(
+      routeGeometry,
+      {
+        latitude: Number(booking.ambulance_latitude),
+        longitude: Number(booking.ambulance_longitude),
+      },
+    );
+    if (remainingMeters === null) return;
+    const distanceKm = (remainingMeters / 1000).toFixed(1);
+    const remainingMinutes = routeDistanceMeters > 0
+      ? Math.round(routeDurationSeconds * remainingMeters / routeDistanceMeters / 60)
+      : 0;
+    routeStatusElement.textContent =
+      `Remaining road route: ${distanceKm} km · about ${remainingMinutes} min by OSRM estimate${booking.gps_stale ? " (last known GPS)" : ""}. Not traffic-aware.`;
   };
 
   function selectEmergency(bookingId, focusMap) {
@@ -378,7 +543,10 @@ document.addEventListener("DOMContentLoaded", () => {
       booking.ambulance_latitude = location.latitude;
       booking.ambulance_longitude = location.longitude;
       booking.last_location_update = location.updated_at;
-      booking.gps_stale = false;
+      booking.gps_accuracy_meters = location.accuracy_meters;
+      booking.booking_status = location.booking_status;
+      booking.status = location.booking_status || booking.status;
+      booking.gps_stale = Boolean(location.gps_stale);
       renderSelection();
       routeForSelection();
     }

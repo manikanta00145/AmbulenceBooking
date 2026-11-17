@@ -1,7 +1,23 @@
+from django.conf import settings
+from django.contrib.sessions.models import Session
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from accounts.models import User
+
+
+class DatabaseSessionStorageTests(TestCase):
+    def test_session_data_is_stored_in_database_and_cookie_contains_session_key(self):
+        session = self.client.session
+        session["workflow_state"] = "persisted"
+        session.save()
+
+        stored_session = Session.objects.get(session_key=session.session_key)
+        self.assertEqual(stored_session.get_decoded()["workflow_state"], "persisted")
+        self.assertEqual(
+            self.client.cookies[settings.SESSION_COOKIE_NAME].value,
+            session.session_key,
+        )
 
 
 class DispatcherUniquenessTests(TestCase):

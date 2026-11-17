@@ -13,17 +13,19 @@ from accounts.otp import (
 )
 from ambulances.models import Ambulance
 from drivers.models import Driver
+from patients.models import Patient
 
 
 class PortalRegistrationForm(UserCreationForm):
     full_name = forms.CharField(max_length=150, label="Full Name")
+    email = forms.EmailField(label="Email")
     employee_id = forms.CharField(max_length=50, label="Employee ID")
     phone_number = forms.CharField(max_length=30, label="Phone Number")
     role = None
 
     class Meta(UserCreationForm.Meta):
         model = User
-        fields = ("full_name", "employee_id", "username", "phone_number")
+        fields = ("full_name", "email", "employee_id", "username", "phone_number")
 
     def __init__(self, *args, request, **kwargs):
         self.request = request
@@ -59,6 +61,12 @@ class PortalRegistrationForm(UserCreationForm):
         if User.objects.filter(employee_id__iexact=employee_id).exists():
             raise ValidationError("An account with this Employee ID already exists.")
         return employee_id
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().casefold()
+        if User.objects.filter(email__iexact=email).exists():
+            raise ValidationError("An account with this email address already exists.")
+        return email
 
     def clean_username(self):
         username = self.cleaned_data["username"].strip()
@@ -100,6 +108,7 @@ class PortalRegistrationForm(UserCreationForm):
         user.first_name = first_name
         user.last_name = last_name
         user.employee_id = self.cleaned_data["employee_id"]
+        user.email = self.cleaned_data["email"]
         user.phone_number = self.cleaned_data["phone_number"]
         user.role = self.role
         user.is_active = False
@@ -116,7 +125,10 @@ class PortalRegistrationForm(UserCreationForm):
 
 class DriverRegistrationForm(PortalRegistrationForm):
     role = User.Role.DRIVER
+    address = forms.CharField(max_length=250, label="Address")
     ambulance_number = forms.CharField(max_length=20, label="Ambulance Number")
+    vehicle_type = forms.CharField(max_length=60, required=False)
+    vehicle_model = forms.CharField(max_length=100, required=False)
     driving_licence_number = forms.CharField(
         max_length=60,
         label="Driving Licence Number",
@@ -125,8 +137,12 @@ class DriverRegistrationForm(PortalRegistrationForm):
     class Meta(PortalRegistrationForm.Meta):
         fields = (
             "full_name",
+            "email",
             "employee_id",
+            "address",
             "ambulance_number",
+            "vehicle_type",
+            "vehicle_model",
             "driving_licence_number",
             "username",
             "phone_number",
@@ -167,7 +183,11 @@ class DriverRegistrationForm(PortalRegistrationForm):
         Ambulance.objects.create(
             vehicle_number=self.cleaned_data["ambulance_number"],
             driver=driver,
+            vehicle_type=self.cleaned_data["vehicle_type"].strip(),
+            vehicle_model=self.cleaned_data["vehicle_model"].strip(),
         )
+        driver.address = self.cleaned_data["address"].strip()
+        driver.save(update_fields=["address"])
 
 
 class CallTakerRegistrationForm(PortalRegistrationForm):
@@ -184,6 +204,7 @@ class CallTakerRegistrationForm(PortalRegistrationForm):
     class Meta(PortalRegistrationForm.Meta):
         fields = (
             "full_name",
+            "email",
             "employee_id",
             "call_taker_office",
             "assigned_emergency_centre",
@@ -207,6 +228,7 @@ class DispatcherRegistrationForm(PortalRegistrationForm):
     class Meta(PortalRegistrationForm.Meta):
         fields = (
             "full_name",
+            "email",
             "employee_id",
             "dispatch_centre",
             "designation",
@@ -233,6 +255,96 @@ class PhoneNumberForm(forms.Form):
         return phone_number
 
 
+class PatientRegistrationForm(UserCreationForm):
+    full_name = forms.CharField(max_length=150, label="Full name")
+    email = forms.EmailField(label="Email")
+    phone_number = forms.CharField(max_length=30, label="Mobile number")
+    age = forms.IntegerField(min_value=0, max_value=120)
+    gender = forms.ChoiceField(
+        choices=[("", "Select gender"), ("Female", "Female"), ("Male", "Male"), ("Other", "Other")]
+    )
+    address = forms.CharField(max_length=250)
+    emergency_contact = forms.CharField(max_length=30)
+
+    class Meta(UserCreationForm.Meta):
+        model = User
+        fields = ("full_name", "email", "phone_number", "username")
+
+    def clean_full_name(self):
+        full_name = " ".join(self.cleaned_data["full_name"].split())
+        if len(full_name.split()) < 2:
+            raise ValidationError("Enter your first and last name.")
+        return full_name
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().casefold()
+        if User.objects.filter(email__iexact=email).exists():
+            raise ValidationError("An account with this email address already exists.")
+        if Patient.objects.filter(email__iexact=email).exists():
+            raise ValidationError("A patient profile with this email address already exists.")
+        return email
+
+    def clean_phone_number(self):
+        phone_number = normalize_phone_number(self.cleaned_data["phone_number"])
+        if phone_number_is_registered(phone_number):
+            raise ValidationError("An account with this phone number already exists.")
+        return phone_number
+
+    def clean_username(self):
+        username = self.cleaned_data["username"].strip()
+        if User.objects.filter(username__iexact=username).exists():
+            raise ValidationError("A user with that username already exists.")
+        return username
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        first_name, last_name = self.cleaned_data["full_name"].split(maxsplit=1)
+        user.first_name = first_name
+        user.last_name = last_name
+        user.email = self.cleaned_data["email"]
+        user.phone_number = self.cleaned_data["phone_number"]
+        user.role = User.Role.PATIENT
+        user.is_active = True
+        user.approval_status = User.ApprovalStatus.APPROVED
+        if commit:
+            user.save()
+        return user
+
+
+class PatientProfileForm(forms.ModelForm):
+    email = forms.EmailField()
+    contact_number = forms.CharField(max_length=30, label="Mobile number")
+
+    class Meta:
+        model = Patient
+        fields = (
+            "name",
+            "email",
+            "contact_number",
+            "age",
+            "gender",
+            "address",
+            "emergency_contact",
+        )
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().casefold()
+        users = User.objects.filter(email__iexact=email)
+        if self.instance.user_id:
+            users = users.exclude(pk=self.instance.user_id)
+        patients = Patient.objects.filter(email__iexact=email).exclude(pk=self.instance.pk)
+        if users.exists() or patients.exists():
+            raise ValidationError("This email address is already registered.")
+        return email
+
+    def clean_contact_number(self):
+        phone_number = normalize_phone_number(self.cleaned_data["contact_number"])
+        user_id = self.instance.user_id
+        if phone_number_is_registered(phone_number, exclude_user_id=user_id):
+            raise ValidationError("This mobile number is already registered.")
+        return phone_number
+
+
 class LoginForm(AuthenticationForm):
     username = forms.CharField(max_length=150)
     password = forms.CharField(widget=forms.PasswordInput)
@@ -240,12 +352,28 @@ class LoginForm(AuthenticationForm):
     def __init__(self, *args, required_role=None, **kwargs):
         self.required_role = required_role
         super().__init__(*args, **kwargs)
+        self.fields["username"].label = "Username or email"
         self.fields["username"].widget.attrs.update(
-            {"placeholder": "Enter your username", "autocomplete": "username"}
+            {"placeholder": "Enter your username or email", "autocomplete": "username"}
         )
         self.fields["password"].widget.attrs.update(
             {"placeholder": "Enter your password", "autocomplete": "current-password"}
         )
+
+    def clean(self):
+        username = self.data.get(self.add_prefix("username"), "").strip()
+        if "@" in username:
+            matches = list(
+                User.objects.filter(email__iexact=username).values_list(
+                    "username",
+                    flat=True,
+                )[:2]
+            )
+            if len(matches) == 1:
+                data = self.data.copy()
+                data[self.add_prefix("username")] = matches[0]
+                self.data = data
+        return super().clean()
 
     def confirm_login_allowed(self, user):
         super().confirm_login_allowed(user)

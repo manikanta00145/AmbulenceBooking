@@ -17,13 +17,19 @@
   <h2>Registered fleet</h2>
   {% if ambulances %}
     <div class="table-wrap"><table>
-      <thead><tr><th>Vehicle</th><th>Driver</th><th>Availability</th><th>Patient onboard</th><th>Last GPS update</th></tr></thead>
+      <thead><tr><th>Vehicle</th><th>Type / model</th><th>Driver</th><th>Hospital</th><th>Availability</th><th>Patient onboard</th><th>Last GPS update</th><th>Actions</th></tr></thead>
       <tbody>{% for ambulance in ambulances %}
         <tr>
-          <td>{{ ambulance.vehicle_number }}</td><td>{{ ambulance.driver }}</td>
+          <td><a href="{% url 'ambulances:detail' ambulance.pk %}"><strong>{{ ambulance.vehicle_number }}</strong></a></td>
+          <td>{{ ambulance.vehicle_type|default:"Not specified" }}{% if ambulance.vehicle_model %}<br><small>{{ ambulance.vehicle_model }}</small>{% endif %}</td>
+          <td>{{ ambulance.driver }}</td><td>{{ ambulance.hospital|default:"Not assigned" }}</td>
           <td><span class="status">{{ ambulance.get_availability_status_display }}</span></td>
           <td>{{ ambulance.get_patient_status_display }}</td>
           <td>{% if ambulance.latitude is not None %}{{ ambulance.location_updated_at|date:"M j, H:i:s" }}{% else %}No location{% endif %}</td>
+          <td>
+            <a href="{% url 'ambulances:edit' ambulance.pk %}" style="margin-right: 0.5rem;">Edit</a>
+            <a href="{% url 'ambulances:delete' ambulance.pk %}" style="color: #dc2626;">Delete</a>
+          </td>
         </tr>
       {% endfor %}</tbody>
     </table></div>

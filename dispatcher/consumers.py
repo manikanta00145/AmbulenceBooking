@@ -11,7 +11,11 @@ class DispatcherLocationConsumer(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
         user = self.scope["user"]
-        if not user.is_authenticated or user.role != user.Role.DISPATCHER:
+        if (
+            not user.is_authenticated
+            or not user.is_active
+            or user.role != user.Role.DISPATCHER
+        ):
             await self.close(code=4403)
             return
         await self.channel_layer.group_add(self.group_name, self.channel_name)

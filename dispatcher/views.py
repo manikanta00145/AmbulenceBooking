@@ -7,7 +7,7 @@ from django.utils import timezone
 from accounts.decorators import role_required
 from ambulances.forms import AmbulanceCreateForm
 from ambulances.models import Ambulance
-from ambulances.services import GPS_MAX_AGE, find_nearest_ambulance
+from ambulances.services import find_nearest_ambulance, is_gps_fresh
 from bookings.models import Booking, BookingStatusHistory
 from bookings.services import assign_ambulance
 from dispatcher.forms import AssignmentForm
@@ -87,7 +87,10 @@ def assign_booking_view(request, booking_id):
 
 @role_required("DISPATCHER")
 def ambulance_list(request):
-    ambulances = Ambulance.objects.select_related("driver").order_by("vehicle_number")
+    ambulances = (
+        Ambulance.objects.select_related("driver", "hospital")
+        .order_by("vehicle_number")
+    )
     return render(
         request,
         "dispatcher/ambulance_list.html",
@@ -106,12 +109,13 @@ def live_locations(request):
     ambulances = list(
         Ambulance.objects.select_related("driver__user").order_by("vehicle_number")
     )
-    active_assignments = dict(
-        Booking.objects.filter(
+    active_assignments = {
+        row["assigned_ambulance_id"]: row
+        for row in Booking.objects.filter(
             status__in=ACTIVE_BOOKING_STATUSES,
             assigned_ambulance__isnull=False,
-        ).values_list("assigned_ambulance_id", "pk")
-    )
+        ).values("assigned_ambulance_id", "booking_id", "status")
+    }
     locations = [
         {
             "id": ambulance.pk,
@@ -120,15 +124,25 @@ def live_locations(request):
             "driver_phone": ambulance.driver.phone_number or ambulance.driver.user.phone_number,
             "latitude": float(ambulance.latitude) if ambulance.latitude is not None else None,
             "longitude": float(ambulance.longitude) if ambulance.longitude is not None else None,
+            "accuracy_meters": (
+                float(ambulance.location_accuracy_meters)
+                if ambulance.location_accuracy_meters is not None
+                else None
+            ),
             "availability": ambulance.availability_status,
             "patient_status": ambulance.patient_status,
             "updated_at": ambulance.location_updated_at.isoformat(),
-            "gps_stale": (
-                ambulance.latitude is None
-                or ambulance.longitude is None
-                or ambulance.location_updated_at < now - GPS_MAX_AGE
+            "gps_stale": not is_gps_fresh(ambulance, now=now),
+            "active_booking_id": (
+                str(active_assignments[ambulance.pk]["booking_id"])
+                if ambulance.pk in active_assignments
+                else None
             ),
-            "active_booking_id": active_assignments.get(ambulance.pk),
+            "booking_status": (
+                active_assignments[ambulance.pk]["status"]
+                if ambulance.pk in active_assignments
+                else None
+            ),
         }
         for ambulance in ambulances
     ]
@@ -200,13 +214,12 @@ def live_locations(request):
                 "last_location_update": (
                     ambulance.location_updated_at.isoformat() if ambulance else None
                 ),
-                "gps_stale": (
-                    ambulance.latitude is None
-                    or ambulance.longitude is None
-                    or ambulance.location_updated_at < now - GPS_MAX_AGE
-                    if ambulance
-                    else True
+                "gps_accuracy_meters": (
+                    float(ambulance.location_accuracy_meters)
+                    if ambulance and ambulance.location_accuracy_meters is not None
+                    else None
                 ),
+                "gps_stale": not is_gps_fresh(ambulance, now=now) if ambulance else True,
                 "suggested_ambulance": (
                     {
                         "id": suggested_ambulance.pk,
